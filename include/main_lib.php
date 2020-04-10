@@ -2561,7 +2561,7 @@ function invalidate_glossary_cache() {
 }
 
 function redirect($path) {
-    header("Location: $path");
+    header("Location: $path", true, 303);
     exit;
 }
 
@@ -2572,8 +2572,7 @@ function redirect_to_home_page($path='', $absolute=false) {
         $path = preg_replace('+^/+', '', $path);
         $path = $urlServer . $path;
     }
-    header("HTTP/1.1 303 See Other");
-    header("Location: $path");
+    header("Location: $path", true, 303);
     exit;
 }
 
