@@ -20,7 +20,6 @@
  * ========================================================================
  */
 
-
 $require_current_course = TRUE;
 $require_login = TRUE;
 $require_help = TRUE;
@@ -200,43 +199,24 @@ if ($is_editor) {
                 ));
 }
 
+
+$tc_session = new TcSessionHelper($tc_type, $course_id, $course_code);
+
+
 if (isset($_GET['add'])) {
     $navigation[] = array('url' => "$_SERVER[SCRIPT_NAME]?course=$course_code", 'name' => $langBBB);
-    bbb_session_form();
+    $tool_content .= $tc_session->form();
 }
 elseif(isset($_POST['update_bbb_session'])) {
     if (!isset($_POST['token']) || !validate_csrf_token($_POST['token'])) csrf_token_error();
-    if (isset($_POST['enableEndDate']) and ($_POST['enableEndDate'])) {
-        $endDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['BBBEndDate']);
-        $end = $endDate_obj->format('Y-m-d H:i:s');
-    } else {
-        $end = NULL;
+    
+    if (!$tc_session->process_form(getDirectReference($_POST['id']))) {
+        Session::Messages($langGeneralError, 'alert-danger');
     }
-
-    $startDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['start_session']);
-    $start = $startDate_obj->format('Y-m-d H:i:s');
-    $notifyUsers = $addAnnouncement = $notifyExternalUsers = 0;
-    if (isset($_POST['notifyUsers']) and $_POST['notifyUsers']) {
-        $notifyUsers = 1;
+    else {
+        Session::Messages($langBBBUpdateSuccessful, 'alert-success');
+        redirect("index.php?course=$course_code");
     }
-    if (isset($_POST['notifyExternalUsers']) and $_POST['notifyExternalUsers']) {
-        $notifyExternalUsers = 1;
-    }
-    if (isset($_POST['addAnnouncement']) and $_POST['addAnnouncement']) {
-        $addAnnouncement = 1;
-    }
-    $record = 'false';
-    if (isset($_POST['record'])) {
-        $record = $_POST['record'];
-    }
-    if (isset($_POST['external_users'])) {
-        $ext_users = implode(',', $_POST['external_users']);
-    } else {
-        $ext_users = null;
-    }
-    add_update_bbb_session($_POST['title'], $_POST['desc'], $start, $end, $_POST['status'], $notifyUsers, $notifyExternalUsers, $addAnnouncement, $_POST['minutes_before'], $ext_users, $record, $_POST['sessionUsers'], true, getDirectReference($_POST['id']));
-    Session::Messages($langBBBAddSuccessful, 'alert-success');
-    redirect("index.php?course=$course_code");
 }
 elseif(isset($_GET['choice']))
 {
@@ -244,16 +224,33 @@ elseif(isset($_GET['choice']))
     switch($_GET['choice'])
     {
         case 'edit':
-            bbb_session_form(getDirectReference($_GET['id']));
+            $tool_content .= $tc_session->form(getDirectReference($_GET['id']));
             break;
         case 'do_delete':
-            delete_bbb_session(getDirectReference($_GET['id']));
+            if ($tc_session->delete(getDirectReference($_GET['id'])) ) {
+                Session::Messages($langBBBDeleteSuccessful, 'alert-success');
+            }
+            else {
+                Session::Messages($langGeneralError, 'alert-danger');
+            }
+            redirect_to_home_page("modules/tc/index.php?course=$course_code");
             break;
         case 'do_disable':
-            disable_bbb_session(getDirectReference($_GET['id']));
+            if ($tc_session->disable(getDirectReference($_GET['id']))) {
+                Session::Messages($langBBBUpdateSuccessful, 'alert-success');
+            }
+            else {
+                Session::Messages($langGeneralError, 'alert-danger');
+            }
+            redirect_to_home_page("modules/tc/index.php?course=$course_code");
             break;
         case 'do_enable':
-            enable_bbb_session(getDirectReference($_GET['id']));
+            if ( $tc_session->enable(getDirectReference($_GET['id'])) ) {
+                Session::Messages($langBBBUpdateSuccessful, 'alert-success');
+            } else {
+                Session::Messages($langGeneralError, 'alert-danger');
+            }
+            redirect_to_home_page("modules/tc/index.php?course=$course_code");
             break;
         case 'do_join':
             //get info
@@ -262,7 +259,7 @@ elseif(isset($_GET['choice']))
             if ($tc_type == 'bbb') { // if tc server is `bbb`
                 $mod_pw = $sess->mod_pw;
                 $record = ($serv->enable_recordings == 'true')? $sess->record: 'false';
-                if (bbb_session_running($_GET['meeting_id']) == false) { // create meeting
+                if ($tc_session->IsMeetingRunning($_GET['meeting_id']) == false) { // create meeting
                     create_meeting($_GET['title'],$_GET['meeting_id'], $mod_pw, $_GET['att_pw'], $record);
                 }
                 if (isset($_GET['mod_pw'])) { // join moderator (== $is_editor)
@@ -292,40 +289,22 @@ elseif(isset($_GET['choice']))
             }
             break;
         case 'import_video':
-            publish_video_recordings($course_code,getDirectReference($_GET['id']));
+            $tool_content .= publish_video_recordings($course_code,getDirectReference($_GET['id']));
             break;
     }
 
 } elseif (isset($_POST['new_bbb_session'])) { // new BBB session
     if (!isset($_POST['token']) || !validate_csrf_token($_POST['token'])) csrf_token_error();
-    $startDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['start_session']);
-    $start = $startDate_obj->format('Y-m-d H:i:s');
-    if (isset($_POST['enableEndDate']) and ($_POST['enableEndDate'])) {
-        $endDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['BBBEndDate']);
-        $end = $endDate_obj->format('Y-m-d H:i:s');
-    } else {
-        $end = NULL;
+    if (!$tc_session->process_form() ) {
+        Session::Messages($langGeneralError, 'alert-danger');
     }
-    $notifyUsers = $notifyExternalUsers = $addAnnouncement = 0;
-    if (isset($_POST['notifyUsers']) and $_POST['notifyUsers']) {
-        $notifyUsers = 1;
+    else {
+        Session::Messages($langBBBAddSuccessful, 'alert-success');
     }
-    if (isset($_POST['notifyExternalUsers']) and $_POST['notifyExternalUsers']) {
-        $notifyExternalUsers = 1;
-    }
-    if (isset($_POST['addAnnouncement']) and $_POST['addAnnouncement']) {
-        $addAnnouncement = 1;
-    }
-    $record = 'true';
-    if (isset($_POST['record'])) {
-        $record = $_POST['record'];
-    }
-    add_update_bbb_session($_POST['title'], $_POST['desc'], $start, $end, $_POST['status'], $notifyUsers, $notifyExternalUsers, $addAnnouncement, $_POST['minutes_before'], implode(',', $_POST['external_users']), $record, $_POST['sessionUsers'], false);
-    Session::Messages($langBBBAddSuccessful, 'alert-success');
     redirect_to_home_page("modules/tc/index.php?course=$course_code");
 }
 else { // display list of conferences
-    bbb_session_details();
+    tc_session_details($tc_type,$course_id,$course_code);
 }
 
 add_units_navigation(TRUE);

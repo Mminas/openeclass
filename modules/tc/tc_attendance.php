@@ -49,39 +49,42 @@ if ($q) {
 }
 $tool_content .= $langWangBBBAttendance;
 
-// scan active bbb rooms
-$xml_url = $bbb_url."api/getMeetings?checksum=".sha1("getMeetings".$salt);
 // read the XML format of bbb answer and ...
 $bbb = new BigBlueButton($salt, $bbb_url);
-$xml = $bbb->getMeetingInfo($xml_url);
+$xml = $bbb->getMeetingsInfo();
 // ... for each meeting room scan connected users
-foreach ($xml->meetings->meeting as $row) {
-    $meet_id = $row->meetingID;
-    $moder_pw = $row->moderatorPW;        
-    /****************************************************/
-    /*		write attendes in SQL database		*/
-    /****************************************************/    
-    $joinParams = array(
-        'meetingId' => $meet_id, // REQUIRED - We have to know which meeting to join.
-        'password' => $moder_pw //,	// REQUIRED - Must match either attendee or moderator pass for meeting.
-    );
-    // Get the URL to meeting info:
-    $room_xml = $bbb-> getMeetingInfoUrl($bbb_url, $salt, $joinParams);
-    /****************************************************/    
-    /*		XML read from URL and write to SQL	*/    
-    /****************************************************/
-    xml2sql($room_xml, $bbb);    
+if ( $xml && $xml->meetings ) {
+    foreach ($xml->meetings->meeting as $row) {
+        $meet_id = $row->meetingID;
+        $moder_pw = $row->moderatorPW;        
+        /****************************************************/
+        /*		write attendes in SQL database		*/
+        /****************************************************/    
+        $joinParams = array(
+            'meetingId' => $meet_id, // REQUIRED - We have to know which meeting to join.
+            'password' => $moder_pw //,	// REQUIRED - Must match either attendee or moderator pass for meeting.
+        );
+        // Get the URL to meeting info:
+        $room_xml = $bbb-> getMeetingInfoUrl($joinParams);
+        /****************************************************/    
+        /*		XML read from URL and write to SQL	*/    
+        /****************************************************/
+        xml2sql($room_xml, $bbb);    
+    }
+}
+else {
+    echo $langGeneralError;
 }
 // draws pop window
 draw_popup();
 
 /**
  * @brief record users attendance in db
- * @param type $room_xml
+ * @param string $room_xml
  */
 function xml2sql($room_xml, $bbb) {
 
-    $xml = $bbb->getMeetingInfo($room_xml);    
+    $xml = $bbb->getMeetingsInfo();    
     $xml_meet_id = $xml->meetingID;   //meetingID of specific bbb request meeting room
 
     foreach ($xml->attendees->attendee as $row) {
