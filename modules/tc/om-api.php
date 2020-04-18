@@ -290,11 +290,6 @@ function get_om_active_rooms($om_server)
     );
     
     $rs = $roomService->getRooms($params);
-    
-    /*foreach ($rs->return->result as $rr)
-    {
-        $active_rooms += 1;
-    }*/
     $active_rooms += count($rs->return->result);
     
     return $active_rooms;

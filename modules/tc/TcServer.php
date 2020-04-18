@@ -1,34 +1,124 @@
 <?php
 
-class TcServer {
-    private $data = false; //this is an associative array
-    
-    public function LoadById($id,$enabledOnly=false) {
-        if ( $enabledOnly )
-            $enabledOnly = " AND enabled='true'";
-            $this->data=Database::get()->querySingle("SELECT * FROM tc_servers WHERE id = ?d".$enabledOnly, $this->id);
-        return $this->data?$this:false;
+class TcServer
+{
+
+    private $data = false;
+
+    // this is an associative array
+    public function __construct(StdClass $data)
+    {
+        if ($data)
+            $this->data = $data;
     }
 
-    public function LoadByType($type,$enabledOnly=false) {
-        if ( $enabledOnly )
+    public static function LoadById($id)
+    {
+        $r = Database::get()->querySingle("SELECT * FROM tc_servers WHERE id = ?d", $id);
+        return $r ? new TcServer($r) : false;
+    }
+
+    public static function LoadOneByType($type, $enabledOnly = false)
+    {
+        if ($enabledOnly)
             $enabledOnly = " AND enabled='true' ";
-        
-            $this->data = Database::get()->querySingle("SELECT * FROM tc_servers WHERE `type` = ?s".$enabledOnly.
-                "ORDER BY weight ASC",$type);
-            return $this->data?$this:false;
+
+        $r = Database::get()->querySingle("SELECT * FROM tc_servers WHERE `type` = ?s" . $enabledOnly . "ORDER BY weight ASC", $type);
+        return $r ? new TcServer($r) : false;
     }
 
-    public function recording() {
-        return $this->data && $this->data['enabled_recordings'] === 'true';
+    public static function LoadAllByType($type, $enabledOnly = false)
+    {
+        if ($enabledOnly)
+            $enabledOnly = " AND enabled='true' ";
+
+        $r = Database::get()->queryArray("SELECT * FROM tc_servers WHERE `type` = ?s" . $enabledOnly . "ORDER BY weight ASC", $type);
+        $s = [];
+        if ($r) {
+            foreach ($r as $rr) {
+                $s[] = new TcServer($rr);
+            }
+        }
+        return $s;
     }
-    
-    public function __get($name) {
-        if ( !$this->data )
+
+    public function recording()
+    {
+        return $this->data && $this->enabled_recordings;
+    }
+
+    public function enabled()
+    {
+        return $this->data && $this->enabled;
+    }
+
+    public function __get($name)
+    {
+        if (! $this->data)
             return false;
-        if ( isset($this->data->$name) )
+
+        // Convert to actual booleans
+        if ($name == 'enabled') {
+            return $this->data->enabled == 'true';
+        } elseif ($name == 'enable_recordings') {
+            return $this->data->enable_recordings == 'true';
+        } elseif ($name == 'all_courses')
+            return $this->data->all_courses == '1';
+
+        if (isset($this->data->$name))
             return $this->data->$name;
+
         return false;
     }
+
+    /**
+     *
+     * @brief check if bbb server is available
+     * @param int $users_to_join
+     *            -- The number of participants to join
+     * @return boolean
+     */
+    function available($users_to_join)
+    {
+        if (! $this->enabled)
+            return false;
+
+        $max_rooms = $this->max_rooms;
+        $max_users = $this->max_users;
+
+        $bbb = new BigBlueButton([
+            'server' => $this->data
+        ]);
+
+        $meetings = $bbb->getMeetings();
+        if (! $meetings)
+            return false;
+
+        $connected_users = 0;
+        $active_rooms = 0;
+        
+        //echo 'MEETING XML:<br>';
+        //print_r($meetings);
+        if ( array_key_exists('meetings',$meetings) ) {
+            foreach ($meetings['meetings'] as $meeting) {
+                //echo 'MEETING<br><br>';
+                //print_r($meeting);
+                $mid = $meeting['meetingID'];
+                if ($mid != null) {
+                    $active_rooms ++;
+                    $connected_users += $meeting['participantCount'];
+                }
+            }
+        }
+
+        // good cases:
+        // max_users = 0 && max_rooms = 0 - UNLIMITED
+        // active_rooms < max_rooms && active_users < max_users
+        // active_rooms < max_rooms && max_users = 0 (UNLIMITED)
+        // active_users < max_users && max_rooms = 0 (UNLIMITED)
+        return (($max_rooms == 0 && $max_users == 0) || (($max_users >= ($users_to_join + $connected_users)) and $active_rooms <= $max_rooms) || ($active_rooms <= $max_rooms and $max_users == 0) || (($max_users >= ($users_to_join + $connected_users)) && $max_rooms == 0));
+    }
+    
+    public function get_connected_users() { return 'NOT IMPLEMENTED'; }
     
 }

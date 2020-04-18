@@ -20,8 +20,8 @@
             <tr>
                 <td>{{ $bbb_server->type }}</td>
                 <td>{{ $bbb_server->api_url }}</td>
-                <td class='text-center'>{{ $bbb_server->enabled == 'true' ? trans('langYes') : trans('langNo') }}</td>
-                <td class='text-center'>{{ get_connected_users($bbb_server->server_key, $bbb_server->api_url, $bbb_server->ip) }}</td>
+                <td class='text-center'>{{ $bbb_server->enabled ? trans('langYes') : trans('langNo') }}</td>
+                <td class='text-center'>{{ $bbb_server->get_connected_users() }}</td>
                 <td class='text-center'>{{ $bbb_server->max_rooms }}</td>
                 <td class='text-center'>{{ $bbb_server->weight }}</td>
                 <td class='option-btn-cell'>
