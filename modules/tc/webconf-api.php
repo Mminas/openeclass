@@ -22,9 +22,9 @@
 
 /**
  * @brief create jnlp file
- * @global type $webDir
- * @global type $course_code
- * @param type $meeting_id
+ * @global string $webDir
+ * @global string $course_code
+ * @param string $meeting_id
  */
 function create_webconf_jnlp_file($meeting_id)
 {

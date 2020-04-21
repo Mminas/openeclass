@@ -22,14 +22,14 @@
 
 /**
  * @brief create join link
- * @param type $meeting_id
- * @param type $username
- * @param type $uid
- * @param type $email
- * @param type $surname
- * @param type $name
- * @param type $moderator
- * @return type
+ * @param string $meeting_id
+ * @param string $username
+ * @param string $uid
+ * @param string $email
+ * @param string $surname
+ * @param string $name
+ * @param boolean $moderator - 0/1
+ * @return string
  */
 function om_join_user($meeting_id, $username, $uid, $email, $surname, $name, $moderator) {
 
@@ -61,8 +61,8 @@ function om_join_user($meeting_id, $username, $uid, $email, $surname, $name, $mo
             'userpass' => $res->password
         );
 
-    $l = array();
-    $l = $soapUsers->loginUser($params);
+    /*$l = */$soapUsers->loginUser($params);
+    //FIXME: Should probably check $l
 
     // check for user profile image if exists
     $profileimageurl = "courses/userimg/${uid}_256";
@@ -96,7 +96,7 @@ function om_join_user($meeting_id, $username, $uid, $email, $surname, $name, $mo
 
 /**
  * @brief check if session is running
- * @param type $meeting_id
+ * @param string $meeting_id
  * @return boolean
  */
 function om_session_running($meeting_id)
@@ -141,8 +141,8 @@ function om_session_running($meeting_id)
 	'userpass' => $res->password
     );
 
-    $l = array();
-    $l = $soapUsers->loginUser($params);
+    /*$l = */$soapUsers->loginUser($params);
+    //FIXME: Should probably check $l
     
     $params = array(
 	'SID' => $session_id,
@@ -168,13 +168,14 @@ function om_session_running($meeting_id)
  * @global type $course_id
  * @global type $course_code
  * @global $langBBBCreationRoomError
- * @param type $title
- * @param type $meeting_id
- * @param type $record
+ * @param string $title
+ * @param string $meeting_id
+ * ---- @param type $record --- unused
+ * @return mixed
  */
-function create_om_meeting($title, $meeting_id, $record)
+function create_om_meeting($title, $meeting_id /*, $record --- unused*/)
 {
-    global $course_id, $langBBBCreationRoomError, $langBBBConnectionErrorOverload, $course_code;
+    global $langBBBConnectionErrorOverload, $course_code;
         
     $run_to = Database::get()->querySingle("SELECT running_at FROM tc_session WHERE meeting_id = ?s", $meeting_id)->running_at;
         
@@ -201,6 +202,7 @@ function create_om_meeting($title, $meeting_id, $record)
     if ($run_to == -1) {
         Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
         redirect_to_home_page("modules/tc/index.php?course=$course_code");
+        return false;
     } else {
         // we find the om server that will serve the session
         $res = Database::get()->querySingle("SELECT * FROM tc_servers WHERE id=?d AND `type` = 'om'", $run_to);
@@ -223,7 +225,6 @@ function create_om_meeting($title, $meeting_id, $record)
             'userpass' => $res->password
         );
 
-        $l = array();
         $l = $soapUsers->loginUser($params);
 
         $params = array(
@@ -231,7 +232,8 @@ function create_om_meeting($title, $meeting_id, $record)
             'name' => $meeting_id,
             'roomtypes_id' => 1,
             'comment' => $title,
-            'numberOfPartizipants' => $users_to_join+20,
+            //'numberOfPartizipants' => $users_to_join+20, //FIXME: this is undefined, + maybe it's "Participants"?
+            'numberOfParticipants' => 20,
             'ispublic' => true,
             'appointment' => false,
             'isDemoRoom' => false,
@@ -240,14 +242,16 @@ function create_om_meeting($title, $meeting_id, $record)
             'isModeratedRoom' => true
         );
 
-        $l = $roomService->addRoomWithModeration($params);       
+        $l = $roomService->addRoomWithModeration($params);
+        return $l;
     }
+    return false;
 }
 
 
 /**
  * @brief get Open Meeting Server active rooms
- * @param type $om_server
+ * @param string $om_server
  * @return int
  */
 function get_om_active_rooms($om_server)
@@ -274,8 +278,8 @@ function get_om_active_rooms($om_server)
 	'userpass' => $res->password
     );
 
-    $l = array();
-    $l = $soapUsers->loginUser($params);
+    /*$l = */$soapUsers->loginUser($params);
+    //FIXME should probably check $l
     
     $params = array(
 	'SID' => $session_id,
@@ -286,19 +290,15 @@ function get_om_active_rooms($om_server)
     );
     
     $rs = $roomService->getRooms($params);
-    
-    foreach ($rs->return->result as $rr)
-    {
-        $active_rooms += 1;
-    }
+    $active_rooms += count($rs->return->result);
     
     return $active_rooms;
 }
 
 /**
  * @brief get Open Meeting Server connected users
- * @param type $om_server
- * @return type
+ * @param string $om_server
+ * @return int Connected users
  */
 function get_om_connected_users($om_server)
 {
@@ -323,8 +323,10 @@ function get_om_connected_users($om_server)
 	'userpass' => $res->password
     );
 
-    $l = array();
-    $l = $soapUsers->loginUser($params);
+    /*$l = */$soapUsers->loginUser($params);
+    //https://github.com/apache/openmeetings/blob/master/openmeetings-webservice/src/main/java/org/apache/openmeetings/webservice/UserWebService.java
+    //this seems to return the session ID or UNKONWN/ERROR
+    //FIXME: Should probably check $l
     
     $params = array(
 	'SID' => $session_id,
@@ -343,8 +345,8 @@ function get_om_connected_users($om_server)
             'roomId' => $rr->id
         );
 
-        $cu = $roomService->getRoomCounters($params);        
-        $connected_users++;
+        $cu = $roomService->getRoomCounters($params);
+        $connected_users += $cu; //FIXME: untested, check here https://github.com/apache/openmeetings/blob/master/openmeetings-webservice/src/main/java/org/apache/openmeetings/webservice/RoomWebService.java
     }
     
     return $connected_users;
@@ -353,8 +355,8 @@ function get_om_connected_users($om_server)
 
 /**
  * @brief check if om server is available
- * @global type $course_id
- * @param type $server_id
+ * @global int $course_id
+ * @param int $server_id
  * @return boolean
  */
 function is_om_server_available($server_id) {

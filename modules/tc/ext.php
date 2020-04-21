@@ -30,6 +30,7 @@ require_once '../../include/init.php';
 if (isset($_GET['meeting_id'])) {
     $meeting_id = $_GET['meeting_id'];
 } else {
+    die('[ext] No meeting ID set.')
     redirect_to_home_page();
     exit;
 }
@@ -42,24 +43,34 @@ if ($q) {
     $att_pw = $q->att_pw;
     $record = $q->record;
     $start_date = $q->start_date;
-    $end_date = $q->end_date;
+    //$end_date = $q->end_date; -- never used
     $active = $q->active;
     $unlock_interval = $q->unlock_interval;
     $external_users = $q->external_users;
     $r_group = explode(",",$external_users);
 } else {
-    redirect_to_home_page();
+    display_message($langGeneralError);
     exit;
 }
 
 $server_type = Database::get()->querySingle("SELECT `type` FROM tc_servers WHERE id = ?d", $server_id)->type;
 
-if ($active <> '1'
-    or date_diff_in_minutes($start_date,date('Y-m-d H:i:s')) > $unlock_interval
-    or !in_array($_GET['username'],$r_group)) {
-        $msg = "Η τηλεδιάσκεψη δεν έχει ξεκινήσει ακόμα. Παρακαλώ δοκιμάστε να συνδεθείτε αργότερα ή επικοινωνήστε με τους διαχειριστές.";
-        display_message($msg);
-        exit;
+if ($active <> '1') {
+    $msg = "Η τηλεδιάσκεψη δεν είναι ενεργή!";
+    display_message($msg);
+    exit;
+}
+
+if (!in_array($_GET['username'],$r_group)) {
+    $msg = "Δεν μπορείτε να συνδεθείτε στην τηλεδιάσκεψη καθώς δεν είστε επιτρεπτός χρήστης.";
+    display_message($msg);
+    exit;
+}
+    
+if (date_diff_in_minutes($start_date,date('Y-m-d H:i:s')) > $unlock_interval ) {
+    $msg = "Η τηλεδιάσκεψη δεν έχει ξεκινήσει ακόμα. Παρακαλώ δοκιμάστε να συνδεθείτε αργότερα ή επικοινωνήστε με τους διαχειριστές.";
+    display_message($msg);
+    exit;
 }
 
 if ($server_type == 'bbb') { // bbb server
