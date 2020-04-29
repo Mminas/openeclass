@@ -764,7 +764,7 @@ class TcBigBlueButtonSession extends TcDbSession
         echo 'BBB meeting creation is a stub<br>';
         return true; 
     }
-
+    
     /**
      *
      * @global type $course_code
@@ -783,36 +783,35 @@ class TcBigBlueButtonSession extends TcDbSession
     {
         global $course_code, $langBBBWelcomeMsg;
 
-        $run_to = $this->running_at;
-        if ($run_to) {
-
+        //If a maximum limit of simultaneous meeting users has been set, use it
+        if (!$this->sessionUsers || $this->sessionUsers <= 0) {
+            $users_to_join = $this->sessionUsers;
+        }
+        else { //otherwise just count participants
             $users_to_join = $this->usersToBeJoined(); // this is DB-expensive so call before the loop
+        }
 
-            // Catch idiot users who limit their meeting to less users than they themselves specified
-            // ...or the poor souls that think their course contains less people than it actually does
-            if ($this->sessionUsers && $this->sessionUsers > 0)
-                $users_to_join = min($users_to_join, $this->sessionUsers);
-
-            // At this point we must start the meeting on a new server if a higher priority slot has opened...
-            // no matter what the previous assigned server was, therefore...
-            // Check each available server of this type
-            $r = TcServer::LoadAllByType('bbb', true);
-            if (($r) and count($r) > 0) {
-                foreach ($r as $server) {
-                    echo 'Checking space for ' . $users_to_join . ' users on server ' . $server->id . '/' . $server->api_url . '....<br>';
-                    if ($server->available($users_to_join)) { // careful, this is an API request on each server
-                        echo 'Server ' . $server->id . ' is AVAILABLE.' . "\n";
-                        break;
-                    }
+/*
+        // At this point we must start the meeting on a new server if a higher priority slot has opened...
+        // no matter what the previous assigned server was, therefore...
+        // Check each available server of this type
+        $r = TcServer::LoadAllByTypes(['bbb'], true);
+        if (($r) and count($r) > 0) {
+            foreach ($r as $server) {
+                echo 'Checking space for ' . $users_to_join . ' users on server ' . $server->id . '/' . $server->api_url . '....<br>';
+                if ($server->available($users_to_join)) { // careful, this is an API request on each server
+                    echo 'Server ' . $server->id . ' is AVAILABLE.' . "\n";
+                    break;
                 }
-            } else {
-                //Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
-                return false;
             }
+        } else {
+            //Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
+            return false;
         }
 
         // Move the session even if the server won't let us set it up, we can use this to check the last server chosen
         Database::get()->query("UPDATE tc_session SET running_at = ?d WHERE meeting_id = ?s", $server->id, $this->meeting_id);
+*/        
 
         $duration = 0;
         if (($this->start_date != null) and ($this->end_date != null)) {
@@ -823,8 +822,7 @@ class TcBigBlueButtonSession extends TcDbSession
             $duration = $hour_duration * 60 + $min_duration;
         }
 
-        $salt = $server->server_key;
-        $bbb_url = $server->api_url;
+        $server = TcServer::LoadById($this->running_at);
         $bbb = new BigBlueButton([
             'server' => $server
         ]);

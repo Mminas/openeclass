@@ -18,21 +18,61 @@ class TcServer
         return $r ? new TcServer($r) : false;
     }
 
-    public static function LoadOneByType($type, $enabledOnly = false)
+    public static function LoadOneByTypes($types, $enabledOnly = false)
     {
         if ($enabledOnly)
             $enabledOnly = " AND enabled='true' ";
 
-        $r = Database::get()->querySingle("SELECT * FROM tc_servers WHERE `type` = ?s" . $enabledOnly . "ORDER BY weight ASC", $type);
+        if (! is_array($types)) {
+            $types = array(
+                $types
+            );
+        }
+        array_walk($types,function(&$value) { $value = '"'.$value.'"'; });
+        $types = implode(',',$types);
+        //TODO: FIX Database to support IN() - probably by supporting arrays as values to bind
+        $r = Database::get()->querySingle("SELECT * FROM tc_servers WHERE `type` IN ($types)" . $enabledOnly . " ORDER BY weight ASC");
         return $r ? new TcServer($r) : false;
     }
 
-    public static function LoadAllByType($type, $enabledOnly = false)
+    public static function LoadOneByCourse($course_id)
+    {
+        $r = Database::get()->querySingle("SELECT id FROM course_external_server WHERE course_id=?d", $course_id);
+        if ($r)
+            return self::LoadById($r);
+        return false;
+    }
+
+    public static function LoadAllByTypes($types, $enabledOnly = false)
     {
         if ($enabledOnly)
             $enabledOnly = " AND enabled='true' ";
 
-        $r = Database::get()->queryArray("SELECT * FROM tc_servers WHERE `type` = ?s" . $enabledOnly . "ORDER BY weight ASC", $type);
+        if (! is_array($types)) {
+            $types = array(
+                $types
+            );
+        }
+        array_walk($types,function(&$value) { $value = '"'.$value.'"'; });
+        $types = implode(',',$types);
+        //TODO: FIX Database to support IN() - probably by supporting arrays as values to bind
+        
+        $r = Database::get()->queryArray("SELECT * FROM tc_servers WHERE `type` IN ($types)" . $enabledOnly . "ORDER BY weight ASC");
+        $s = [];
+        if ($r) {
+            foreach ($r as $rr) {
+                $s[] = new TcServer($rr);
+            }
+        }
+        return $s;
+    }
+
+    public static function LoadAll($enabledOnly = false)
+    {
+        if ($enabledOnly)
+            $enabledOnly = " WHERE enabled='true' ";
+
+        $r = Database::get()->queryArray("SELECT * FROM tc_servers" . $enabledOnly . " ORDER BY weight ASC");
         $s = [];
         if ($r) {
             foreach ($r as $rr) {
@@ -96,13 +136,13 @@ class TcServer
 
         $connected_users = 0;
         $active_rooms = 0;
-        
-        //echo 'MEETING XML:<br>';
-        //print_r($meetings);
-        if ( array_key_exists('meetings',$meetings) ) {
+
+        // echo 'MEETING XML:<br>';
+        // print_r($meetings);
+        if (array_key_exists('meetings', $meetings)) {
             foreach ($meetings['meetings'] as $meeting) {
-                //echo 'MEETING<br><br>';
-                //print_r($meeting);
+                // echo 'MEETING<br><br>';
+                // print_r($meeting);
                 $mid = $meeting['meetingID'];
                 if ($mid != null) {
                     $active_rooms ++;
@@ -118,7 +158,9 @@ class TcServer
         // active_users < max_users && max_rooms = 0 (UNLIMITED)
         return (($max_rooms == 0 && $max_users == 0) || (($max_users >= ($users_to_join + $connected_users)) and $active_rooms <= $max_rooms) || ($active_rooms <= $max_rooms and $max_users == 0) || (($max_users >= ($users_to_join + $connected_users)) && $max_rooms == 0));
     }
-    
-    public function get_connected_users() { return 'NOT IMPLEMENTED'; }
-    
+
+    public function get_connected_users()
+    {
+        return 'NOT IMPLEMENTED';
+    }
 }

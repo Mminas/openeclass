@@ -168,7 +168,6 @@ abstract class TcApi
     public abstract function deleteRecordings($recordingParams);
 
     public abstract function clearCaches();
-    
 }
 
 /**
@@ -190,17 +189,17 @@ abstract class TcSession
     public abstract function delete();
 
     public abstract function IsKnownToServer();
-    
+
     public abstract function IsRunning();
 
     public abstract function usersTotal();
-    
+
     public abstract function join_user(array $joinParams);
-    
+
     public abstract function createMeeting();
-    
+
     public abstract function startMeeting();
-    
+
     public abstract function clearCaches();
 }
 
@@ -224,9 +223,14 @@ abstract class TcDbSession
     // this is an associative array
     public $data = false;
 
-    public function LoadById($id)
+    public function LoadById($id = null)
     {
-        $this->session_id = $id;
+        if (! $id) {
+            if (! $this->session_id)
+                throw new RuntimeException('[TC API] Unable to load session without session id.');
+        } else {
+            $this->session_id = $id;
+        }
         $this->data = Database::get()->querySingle("SELECT * FROM tc_session WHERE id = ?d", $this->session_id);
         return $this->data ? $this : false;
     }
@@ -258,7 +262,11 @@ abstract class TcDbSession
     function __construct(array $params = [])
     {
         if (count($params) > 0) {
-            $this->meeting_id = $params['meeting_id']; // OPTIONAL
+            if (isset($params['session_id']))
+                $this->session_id = $params['session_id'];
+
+            if (isset($params['meeting_id']))
+                $this->meeting_id = $params['meeting_id']; // OPTIONAL
 
             if (isset($params['server']))
                 $this->server_id = $params['server']->server_id;
@@ -363,16 +371,19 @@ abstract class TcDbSession
         if (! $server)
             die('Server not found for meeting id  ' . $this->meeting_id);
 
-        if (!$this->running_at )
+        if (! $this->running_at)
             return false;
 
-        /*if ($server->type != $this->tc_type)
-            die('Error: mismatched session and server type for meeting id ' . $meeting_id);*/
+        /*
+         * if ($server->type != $this->tc_type)
+         * die('Error: mismatched session and server type for meeting id ' . $meeting_id);
+         */
 
         return $server->enabled;
     }
 
     /**
+     *
      * @brief Check is this session is known to server (scheduled)
      * @return boolean
      */
@@ -380,7 +391,7 @@ abstract class TcDbSession
     {
         return false;
     }
-    
+
     /**
      *
      * @brief check if session is running (locally)
@@ -392,6 +403,7 @@ abstract class TcDbSession
     }
 
     /**
+     *
      * @brief Return count of everybody in this course + external participants
      * @return number
      */
@@ -401,27 +413,27 @@ abstract class TcDbSession
                             WHERE course_user.course_id = ?d AND course_user.user_id = user.id", $this->course_id)->count;
         if ($q === null)
             die('Failed to get user count for course ' . $this->course_id);
-            
-            $total = $q;
-            
-            $total += $this->external_users?count(explode(',', $this->external_users)):0;
-            
-            return $total;
+
+        $total = $q;
+
+        $total += $this->external_users ? count(explode(',', $this->external_users)) : 0;
+
+        return $total;
     }
-    
-    // 
+
+    //
     /**
+     *
      * @brief Return count of actual participants in this session. if groups are specified, we can't include all users of this course
      * @return number
      */
     public function usersToBeJoined()
     {
-
         $participants = explode(',', $this->participants);
-        
+
         // If participants includes "all users" (of this course) get them
         if ($this->participants == '0' || in_array("0", $participants)) {
-            $total = $this->usersTotal(); //this includes external users
+            $total = $this->usersTotal(); // this includes external users
         } else { // There are special entries, could be groups or users of this course
             $group_ids = [];
             $user_ids = [];
@@ -438,23 +450,23 @@ abstract class TcDbSession
                 }
             }
             $total = count($user_ids);
-            
+
             // Get the users for the groups
-            $q = Database::get()->queryArray("SELECT COUNT(DISTINCT u.id) FROM user u
+            $q = Database::get()->querySingle("SELECT COUNT(DISTINCT u.id) as `count` FROM user u
                 INNER JOIN group_members gm ON u.id=gm.user_id
                 WHERE gm.group_id IN (?s)", implode(',', $group_ids));
             if ($q === null)
                 die('Failed to get users count for groups ' . implode(',', $group_ids));
-                
-                $total += $q;
-                
-                //must re-count the external users
-                $total += $this->external_users?count(explode(',', $this->external_users)):0;
+
+            $total += $q->count;
+
+            // must re-count the external users
+            $total += $this->external_users ? count(explode(',', $this->external_users)) : 0;
         }
-        
+
         return $total;
     }
-    
+
     /**
      *
      * @brief create join as moderator/user link

@@ -29,11 +29,11 @@ class ExtAppManager {
 
     public static $AppNames = array('GoogleDriveApp', 'OneDriveApp',
         'DropBoxApp', 'OwnCloudApp', 'WebDAVApp', 'FTPApp', 'OpenDelosApp',
-        'BBBApp', 'OpenMeetings', 'WebConfApp', 'AutojudgeApp', 'AntivirusApp',
+        'TcApp', 'AutojudgeApp', 'AntivirusApp',
         'WafApp', 'secondfaApp', 'AnalyticsApp', 'UnPlagApp', 'TurnitinApp');
     private static $APPS = null;
     private static $ExclusiveAppNames = array(
-        'tc'=>['BBBApp','OpenMeetings','WebConfApp']
+        //'tc'=>['BBBApp','OpenMeetings','WebConfApp','ZoomApp']
     );
     private static $EXCLUSIVEAPPS = null;
 
@@ -239,46 +239,6 @@ abstract class ExtApp {
         return $this->getBaseURL() . "template/icons/" . $this->getName() . ".png";
     }
 
-}
-
-abstract class ExtTCApp extends ExtApp {
-    protected $sessionType = null; //must be overriden in descendants
-    
-    public function update_tc_sessions() {
-        if ( $this->sessionType === null ) die('[externals.php] Session type uninitialized');
-        $r = Database::get()->querySingle("SELECT id FROM tc_servers
-                                            WHERE `type` = '".$this->sessionType."' AND enabled = 'true'
-                                            ORDER BY weight ASC");
-        if ($r) {
-            $tc_id = $r->id;
-            Database::get()->query("UPDATE tc_session SET running_at = $tc_id");
-            Database::get()->query("UPDATE course_external_server SET external_server = $tc_id");
-        }
-    }
-
-    /**
-     *
-     * @param boolean $status
-     */
-    function setEnabled($status) {
-        if ( $status==1 && !$this->isEnabled() ) {
-            parent::setEnabled($status);
-            $this->update_tc_sessions();
-        }
-        else
-            parent::setEnabled($status);
-    }
-    
-    /**
-     * Return true if any TC servers of type $sessionType are enabled, else false
-     *
-     * @return boolean
-     */
-    public function isConfigured() {
-        return Database::get()->querySingle("SELECT COUNT(*) AS count FROM tc_servers WHERE enabled='true' AND `type` = ?s",$this->sessionType)->count > 0;
-    }
-    
-    
 }
 
 abstract class ExtParam {

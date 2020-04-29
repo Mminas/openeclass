@@ -22,9 +22,9 @@
 
 require_once 'genericrequiredparam.php';
 
-class BBBApp extends ExtTCApp {
+class TcApp extends ExtApp {
 
-    const NAME = "BigBlueButton";
+    const NAME = "Teleconferencing";
 
     public function __construct() {
         parent::__construct();
@@ -44,7 +44,40 @@ class BBBApp extends ExtTCApp {
     }
 
     public function getConfigUrl() {
-        return 'modules/admin/bbbmoduleconf.php';
+        return 'modules/admin/tcmoduleconf.php';
     }
 
+    public function update_tc_sessions() {
+        $r = Database::get()->querySingle("SELECT id FROM tc_servers WHERE enabled = 'true' ORDER BY weight ASC");
+        if ($r) {
+            $tc_id = $r->id;
+            Database::get()->query("UPDATE tc_session SET running_at = $tc_id");
+            Database::get()->query("UPDATE course_external_server SET external_server = $tc_id");
+        }
+    }
+    
+    /**
+     *
+     * @param boolean $status
+     */
+    function setEnabled($status) {
+        if ( $status==1 && !$this->isEnabled() ) {
+            parent::setEnabled($status);
+            $this->update_tc_sessions();
+        }
+        else
+            parent::setEnabled($status);
+    }
+    
+    /**
+     * Return true if any TC servers of type $sessionType are enabled, else false
+     *
+     * @return boolean
+     */
+    public function isConfigured() {
+        return Database::get()->querySingle("SELECT COUNT(*) AS count FROM tc_servers WHERE enabled='true'")->count > 0;
+    }
+    
+    
+    
 }

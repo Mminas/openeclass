@@ -4917,6 +4917,9 @@ $langCMeta['instructor_add'] = "Προσθήκη διδάσκοντος";
   Messages for Big Blue Button
  * ***************************************** */
 
+$langBBBServer = "Server";
+$langBBBRecordingNotAvailable = "Η καταγραφή δεν είναι διαθέσιμη σε αυτόν τον εξυπηρετητή"
+$langBBBRecordingMayNotBeAvailable = "Η καταγραφή μπορεί να μην είναι διαθέσιμη όταν επιλεχτεί εξυπηρετητής";
 $langBBBConf = "Ρυθμίσεις \"Τηλεσυνεργασίας\" του $siteName";
 $langAddServer = "Προσθήκη εξυπηρετητή";
 $langAddBBBServerInfo = "Στοιχεία νέου εξυπηρετητή BigBlueButton";

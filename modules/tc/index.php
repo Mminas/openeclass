@@ -47,8 +47,6 @@ $action->record(MODULE_ID_TC);
 
 $toolName = $langBBB;
 
-$tc_type = is_configured_tc_server();
-
 load_js('tools.js');
 load_js('bootstrap-datetimepicker');
 load_js('validation.js');
@@ -150,7 +148,8 @@ $head_content .= "<script type='text/javascript'>
 </script>
 ";
 
-$tc_session_helper = new TcSessionHelper($tc_type, $course_id, $course_code);
+$tc_types = tc_configured_apis(); //all available apis globally
+$tc_session_helper = new TcSessionHelper($course_id,$course_code,$tc_types);
 $isactiveserver = $tc_session_helper->is_active_tc_server();
 
 if ($is_editor) {
@@ -240,9 +239,11 @@ if (isset($_GET['add'])) {
     );
     if (isset($_GET['id'])) {
         $session_id = getDirectReference($_GET['id']);
-        $tc_session = $tc_session_helper->getSessionByIdAndType($session_id);
-    } elseif (isset($_GET['meeting_id'])) {
-        $tc_session = $tc_session_helper->getSessionByMeetingIdAndType($_GET['meeting_id']); // FIXME: Meeting id's could be the same between types!
+        $tc_session = $tc_session_helper->getSessionById($session_id);
+        if ( !$tc_session )
+            throw new RuntimeException('Failed to load session '.$session_id);
+    } elseif (isset($_GET['session_id'])) {
+        $tc_session = $tc_session_helper->getSessionById($_GET['session_id']);
     }
     switch ($_GET['choice']) {
         case 'edit':
@@ -280,8 +281,11 @@ if (isset($_GET['add'])) {
 
             // gotta be careful here - we want to put all participants in the same session, not split them around servers
             // we assume we'll only create the session once, so getting set up on a server should lock the session there
-            // TODO: Add support in plugins for LOCKING a session to a server - this needs DB modification
+            //TODO: Add support in plugins for LOCKING a session to a server - this needs DB modification
             echo 'Checking if meeting is scheduled (known to server)...<br>';
+            //print_r($tc_session);
+            //die();
+            
             if ($tc_session->IsKnownToServer()) {
                 echo 'Meeting is Known to server<br>';
             } else {
@@ -309,6 +313,7 @@ if (isset($_GET['add'])) {
             // redirect("index.php?course=$course_code");
             // $tool_content .= "<div class='alert alert-warning'>$langBBBMaxUsersJoinError</div>";
             $x = $tc_session->join_user([
+                'host' => $is_editor,
                 'pw' => $is_editor ? $tc_session->mod_pw : $tc_session->mod_att,
                 'name' => $_SESSION['surname'] . ' ' . $_SESSION['givenname'],
                 'uid' => $uid
@@ -351,7 +356,12 @@ if (isset($_GET['add'])) {
     }
     redirect_to_home_page("modules/tc/index.php?course=$course_code");
 } else { // display list of conferences
-    $tool_content .= $tc_session_helper->tc_session_details($tc_type, $course_id, $course_code);
+    require_once 'zoom-api.php';
+    /*$za = new Zoom(['url'=>'https://api.zoom.us/v2/','key'=>'a','secret'=>'b,c']);
+    $za->x();
+    die();*/
+    
+    $tool_content .= $tc_session_helper->tc_session_details();
 }
 
 add_units_navigation(TRUE);
