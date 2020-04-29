@@ -107,16 +107,16 @@ else if (isset($_POST['submit'])) { // PROCESS CREATE / EDIT
     }
     // Display result message
     Session::Messages($langFileUpdatedSuccess,"alert-success");
-    redirect_to_home_page("modules/admin/bbbmoduleconf.php");
+    redirect_to_home_page("modules/admin/tcmoduleconf.php");
 }
 elseif (isset($_GET['add_server']) || isset($_GET['edit_server'])) { //SHOW CREATE/EDIT FORM
     $pageName = isset($_GET['add_server']) ? $langAddServer : $langEdit;
     $toolName = $langBBBConf;
-    $navigation[] = array('url' => 'bbbmoduleconf.php', 'name' => $langBBBConf);
+    $navigation[] = array('url' => 'tcmoduleconf.php', 'name' => $langBBBConf);
     $data['action_bar'] = action_bar([
                 [
                     'title' => $langBack,
-                    'url' => "bbbmoduleconf.php",
+                    'url' => "tcmoduleconf.php",
                     'icon' => 'fa-reply',
                     'level' => 'primary-label'
                 ]
@@ -174,8 +174,7 @@ elseif (isset($_GET['add_server']) || isset($_GET['edit_server'])) { //SHOW CREA
             'icon' => 'fa-reply',
             'level' => 'primary-label')));
 
-    //$data['bbb_servers'] = Database::get()->queryArray("SELECT * FROM tc_servers WHERE type='bbb'");
-    $data['bbb_servers'] = TcServer::LoadAllByType('bbb');
+    $data['bbb_servers'] = TcServer::LoadAll();
     $view = 'admin.other.extapps.bbb.index';
 }
 
