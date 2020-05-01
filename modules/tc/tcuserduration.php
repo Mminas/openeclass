@@ -23,6 +23,25 @@
  * @file tcuserduration.php
  * @brief display user duration in teleconference
  */
+
+
+/**
+ *
+ * @brief get tc title given its meeting id
+ * @param string $meeting_id
+ * @return string
+ */
+function get_tc_title($meeting_id)
+{
+    global $course_id;
+    
+    $result = Database::get()->querySingle("SELECT title FROM tc_session
+                    WHERE meeting_id = ?s AND course_id = ?d", $meeting_id, $course_id)->title;
+    
+    return $result;
+}
+
+
 $require_current_course = true;
 $require_login = TRUE;
 $require_help = true;

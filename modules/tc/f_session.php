@@ -72,33 +72,6 @@ class TcSessionHelper
         return $obj->LoadById($id);
     }
     
-/*    public function getSessionByTypes()
-    {
-        $apisess = [];
-        foreach ($this->tc_types as $tc_type) {
-            if (! array_key_exists($tc_type, $apisess)) {
-                $classname = self::AVAILABLE_APIS[$tc_type];
-                require_once $tc_type . '-api.php';
-
-                $classname = 'Tc' . $classname . 'Session';
-                $obj = new $classname();
-                $apisess[$tc_type] = $obj->LoadById($id);
-            }
-        }
-        return $apisess;
-    }*/
-
-    /*
-    public function getSessionByMeetingIdAndType($meetingid)
-    {
-        $classname = self::AVAILABLE_APIS[$this->tc_type];
-        require_once $this->tc_type . '-api.php';
-
-        $classname = 'Tc' . $classname . 'Session';
-        $obj = new $classname();
-        return $obj->LoadByMeetingId($meetingid);
-    }*/
-    
     /**
      *
      * @brief Create form for new session scheduling
@@ -166,7 +139,6 @@ class TcSessionHelper
             $server = TcServer::LoadOneByCourse($this->course_id); // Find the server for this course as previously assigned. This may return false
         } else { // creating new session: set defaults
             $record = true;
-            $types = $this->tc_types;
             $status = 1;
             $unlock_interval = '10';
             $r_group = array();
@@ -460,7 +432,8 @@ class TcSessionHelper
             }
         }
         
-        return $this->add_update($_POST['title'], $_POST['desc'], $start, $end, $_POST['status'], $notifyUsers, $notifyExternalUsers, $addAnnouncement, $_POST['minutes_before'], $ext_users, $record, $_POST['sessionUsers'], $r_group, $session_id);
+        return $this->add_update($_POST['title'], $_POST['desc'], $start, $end, $_POST['status'], $notifyUsers, $notifyExternalUsers, 
+            $addAnnouncement, $_POST['minutes_before'], $ext_users, $record, $_POST['sessionUsers'], $r_group, $session_id);
     }
 
     /**
@@ -498,7 +471,7 @@ class TcSessionHelper
         $addAnnouncement, $minutes_before, $external_users, $record, $sessionUsers, $groups, $session_id = 0)
     {
         global $langBBBScheduledSession, $langBBBScheduleSessionInfo, $langBBBScheduleSessionInfo2, $langBBBScheduleSessionInfoJoin,
-        $langDescription, $course_code, $course_id, $urlServer, $tc_type;
+        $langAvailableBBBServers, $langDescription, $urlServer;
 
         //Take this opportunity to re-select a server. Also, the type may have changed.
         $server = $this->pickServer();
@@ -523,7 +496,7 @@ class TcSessionHelper
                 return false;
 
             // logging
-            Log::record($course_id, MODULE_ID_TC, LOG_MODIFY, array(
+            Log::record($this->course_id, MODULE_ID_TC, LOG_MODIFY, array(
                 'id' => $session_id,
                 'title' => $title,
                 'desc' => html2text($desc)
@@ -531,12 +504,6 @@ class TcSessionHelper
 
             $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $session_id);
         } else { // adding new session
-            $server = $this->pickServer();
-            if ( !$server ) {
-                Session::Messages($langAvailableBBBServers, 'alert-danger');
-                return false;
-            }
-            
             $q = Database::get()->query("INSERT INTO tc_session SET course_id = ?d,
                                                             title = ?s,
                                                             description = ?s,
@@ -553,7 +520,7 @@ class TcSessionHelper
                                                             participants = ?s,
                                                             record = ?s,
                                                             sessionUsers = ?s", 
-                $course_id, $title, $desc, $start_session, $BBBEndDate, $status, $server->id, generateRandomString(), 
+                $this->course_id, $title, $desc, $start_session, $BBBEndDate, $status, $server->id, generateRandomString(), 
                 generateRandomString(), generateRandomString(), $minutes_before, $external_users, $r_group, $record, $sessionUsers);
 
             if (! $q)
@@ -575,18 +542,16 @@ class TcSessionHelper
                 die('Failed to create/schedule the meeting.');
 
             // logging
-            Log::record($course_id, MODULE_ID_TC, LOG_INSERT, array(
+            Log::record($this->course_id, MODULE_ID_TC, LOG_INSERT, array(
                 'id' => $q->lastInsertID,
                 'title' => $_POST['title'],
                 'desc' => html2text($_POST['desc']),
-                'tc_type' => $tc_type
+                'tc_type' => implode(',',$this->tc_types)
             ));
 
             $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $q->lastInsertID);
         }
-        $new_meeting_id = $q->meeting_id;
         $new_title = $q->title;
-        // $new_mod_pw = $q->mod_pw; -- UNUSED
         $new_att_pw = $q->att_pw;
         // if we have to notify users for new session
         if ($notifyUsers == "1" && is_array($groups) and count($groups) > 0) {
@@ -596,7 +561,7 @@ class TcSessionHelper
                                                     JOIN user u ON cu.user_id=u.id
                                                 WHERE cu.course_id = ?d
                                                 AND u.email <> ''
-                                                AND u.email IS NOT NULL", $course_id);
+                                                AND u.email IS NOT NULL", $this->course_id);
             } else {
                 $r_group = '';
                 foreach ($groups as $group) {
@@ -616,7 +581,7 @@ class TcSessionHelper
                 $result = Database::get()->queryArray("SELECT course_user.user_id, user.email
                                                         FROM course_user, user
                                                    WHERE course_id = ?d AND user.id IN ($r_group) AND
-                                                         course_user.user_id = user.id", $course_id);
+                                                         course_user.user_id = user.id", $this->course_id);
             }
             foreach ($result as $row) {
                 $emailTo = $row->email;
@@ -690,11 +655,11 @@ class TcSessionHelper
 
         if ($addAnnouncement == '1') { // add announcement
             $orderMax = Database::get()->querySingle("SELECT MAX(`order`) AS maxorder FROM announcement
-                                                   WHERE course_id = ?d", $course_id)->maxorder;
+                                                   WHERE course_id = ?d", $this->course_id)->maxorder;
             $order = $orderMax + 1;
             Database::get()->querySingle("INSERT INTO announcement (content,title,`date`,course_id,`order`,visible)
                                     VALUES ('" . $langBBBScheduleSessionInfo . " \"" . q($title) . "\" " . $langBBBScheduleSessionInfo2 . " " . $start_session . "',
-                                             '$langBBBScheduledSession', " . DBHelper::timeAfter() . ", ?d, ?d, '1')", $course_id, $order);
+                                             '$langBBBScheduledSession', " . DBHelper::timeAfter() . ", ?d, ?d, '1')", $this->course_id, $order);
         }
 
         return true; // think positive
@@ -735,7 +700,10 @@ class TcSessionHelper
      */
     function tc_session_details()
     {
-        global $is_editor, $uid, $langBBBServer, $langNewBBBSessionStart, $langParticipants, $langConfirmDelete, $langHasExpiredS, $langBBBSessionJoin, $langNote, $langBBBNoteEnableJoin, $langTitle, $langActivate, $langDeactivate, $langEditChange, $langDelete, $langParticipate, $langNoBBBSesssions, $langDaysLeft, $langBBBNotServerAvailableStudent, $langNewBBBSessionEnd, $langBBBNotServerAvailableTeacher, $langBBBImportRecordings, $langAllUsers, $langDate, $langBBBNoServerForRecording;
+        global $is_editor, $uid, $langBBBServer, $langNewBBBSessionStart, $langParticipants, $langConfirmDelete, $langHasExpiredS, 
+            $langBBBSessionJoin, $langNote, $langBBBNoteEnableJoin, $langTitle, $langActivate, $langDeactivate, $langEditChange, $langDelete, 
+            $langParticipate, $langNoBBBSesssions, $langDaysLeft, $langBBBNotServerAvailableStudent, $langNewBBBSessionEnd, 
+            $langBBBNotServerAvailableTeacher, $langBBBImportRecordings, $langAllUsers, $langDate, $langBBBNoServerForRecording;
 
         $tool_content = '';
 
@@ -809,7 +777,6 @@ class TcSessionHelper
                 } elseif (isset($end_date) and ($timeLeft < 0)) {
                     $timeLabel .= "<br><span class='label label-danger'><small>$langHasExpiredS</small></span>";
                 }
-                $meeting_id = $row->meeting_id;
                 $record = $row->record;
                 $desc = isset($row->description) ? $row->description : '';
 
@@ -822,7 +789,6 @@ class TcSessionHelper
 
                 if ($canJoin) {
                     $joinLink = '<a href="'.$this->get_join_link('',$row->id).'">'.q($title).'</a>';
-                    //$joinLink = "<a href='$_SERVER[SCRIPT_NAME]?choice=do_join&amp;course=$this->course_code&amp;meeting_id=" . urlencode($meeting_id) . "' target='_blank'>" . q($title) . "</a>";
                 } else {
                     $joinLink = q($title);
                 }
@@ -913,7 +879,7 @@ class TcSessionHelper
                     }
 
                     // Always allow access to editor switched to student view
-                    $access = $access || (isset($_SESSION['student_view']) and $_SESSION['student_view'] == $course_code);
+                    $access = $access || (isset($_SESSION['student_view']) and $_SESSION['student_view'] == $this->course_code);
 
                     if ($access) {
                         if (! $headingsSent) {
@@ -1016,6 +982,96 @@ class TcSessionHelper
         $params = array_merge($params,$additionalParams);
         return $url.'?'.http_build_query($params);
     }
+    
+    
+    /**
+     *
+     * @brief display video recordings in multimedia
+     * @param int $session_id
+     * @return string
+     */
+    function publish_video_recordings($session_id)
+    {
+        global $langBBBImportRecordingsOK, $langBBBImportRecordingsNo, $langBBBImportRecordingsNoNew;
+        
+        $sessions = Database::get()->queryArray("
+            SELECT tc_session.id, tc_session.course_id AS course_id,tc_session.title, tc_session.description, tc_session.start_date,
+            tc_session.meeting_id, course.prof_names 
+            FROM tc_session
+            LEFT JOIN course ON tc_session.course_id=course.id 
+            WHERE course.code=?s AND tc_session.id=?d", $this->course_id, $session_id);
+        
+        $servers = Database::get()->queryArray("SELECT * FROM tc_servers WHERE enabled='true' AND `type` = 'bbb'");
+        
+        $perServerResult = array(); /* AYTO THA EINAI TO ID THS KATASTASHS GIA KATHE SERVER */
+        
+        $tool_content = '';
+        if (($sessions) && ($servers)) {
+            $msgID = array();
+            foreach ($servers as $server) {
+                $salt = $server->server_key;
+                $bbb_url = $server->api_url;
+                
+                $bbb = new BigBlueButton($salt, $bbb_url);
+                $sessionsCounter = 0;
+                foreach ($sessions as $session) {
+                    $recordingParams = array(
+                        'meetingId' => $session->meeting_id
+                    );
+                    $ch = curl_init();
+                    $timeout = 0;
+                    curl_setopt($ch, CURLOPT_URL, $bbb->getRecordingsUrl($recordingParams));
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+                    $recs = curl_exec($ch);
+                    curl_close($ch);
+                    
+                    $xml = simplexml_load_string($recs);
+                    // If not set, it means that there is no video recording.
+                    // Skip and search for next one
+                    if (isset($xml->recordings->recording /* ->playback->format->url */)) {
+                        foreach ($xml->recordings->recording as $recording) {
+                            $url = (string) $recording->playback->format->url;
+                            // Check if recording already in videolinks and if not insert
+                            $c = Database::get()->querySingle("SELECT COUNT(*) AS cnt FROM videolink WHERE url = ?s", $url);
+                            if ($c->cnt == 0) {
+                                Database::get()->querySingle("
+                                    INSERT INTO videolink (course_id,url,title,description,creator,publisher,date,visible,public)
+                                    VALUES (?s,?s,?s,IFNULL(?s,'-'),?s,?s,?t,?d,?d)",$session->course_id, $url, $session->title,
+                                    strip_tags($session->description), $session->prof_names, $session->prof_names, $session->start_date, 1, 1);
+                                $msgID[$sessionsCounter] = 2; /* AN EGINE TO INSERT SWSTA PAIRNEI 2 */
+                            } else {
+                                if (isset($msgID[$sessionsCounter])) {
+                                    if ($msgID[$sessionsCounter] <= 1)
+                                        $msgID[$sessionsCounter] = 1; /* AN DEN EXEI GINEI KANENA INSERT MEXRI EKEINH TH STIGMH PAIRNEI 1 */
+                                } else
+                                    $msgID[$sessionsCounter] = 1;
+                            }
+                        }
+                    } else {
+                        $msgID[$sessionsCounter] = 0; /* AN DEN YPARXOUN KAN RECORDINGS PAIRNEI 0 */
+                    }
+                    $sessionsCounter ++;
+                }
+                $finalMsgPerSession = max($msgID);
+                array_push($perServerResult, $finalMsgPerSession);
+            }
+            $finalMsg = max($perServerResult);
+            switch ($finalMsg) {
+                case 0:
+                    $tool_content .= "<div class='alert alert-warning'>$langBBBImportRecordingsNo</div>";
+                    break;
+                case 1:
+                    $tool_content .= "<div class='alert alert-warning'>$langBBBImportRecordingsNoNew</div>";
+                    break;
+                case 2:
+                    $tool_content .= "<div class='alert alert-success'>$langBBBImportRecordingsOK</div>";
+                    break;
+            }
+        }
+        return $tool_content;
+    }
+    
 }
 
 /**

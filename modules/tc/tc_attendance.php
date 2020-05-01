@@ -83,7 +83,20 @@ draw_popup();
  * @param string $room_xml
  */
 function xml2sql($room_xml, $bbb) {
-
+    /**
+     *
+     * @brief get tc meeting id given its encoded meeting id
+     * @param string $meeting_id
+     * @return mixed
+     */
+    function get_tc_id($meeting_id)
+    {
+        $result = Database::get()->querySingle("SELECT id FROM tc_session
+                    WHERE meeting_id = ?s", $meeting_id)->id;
+        
+        return $result;
+    }
+    
     $xml = $bbb->getMeetingsInfo();    
     $xml_meet_id = $xml->meetingID;   //meetingID of specific bbb request meeting room
 

@@ -20,6 +20,16 @@
  * e-mail: info@openeclass.org
  * ========================================================================
  */
+global $langBBB,$langNewBBBSession,$langBBBRecordUserParticipation,
+$langBBBUpdateSuccessful,$langBBBDeleteSuccessful,$langBBBCreationRoomError,$langBBBConnectionError,$langBBBAddSuccessful;
+global $langModify,$langParticipate,$langGeneralError;
+global $is_editor,$langBack,$uid,$language,$course_id,$course_code;
+
+//TODO: these are globals set in this file, check their declaration/use
+global $pageName,$toolName,$navigation;
+global $require_current_course,$require_login,$require_help,$helpTopic,$guest_allowed;
+
+
 $require_current_course = TRUE;
 $require_login = TRUE;
 $require_help = TRUE;
@@ -28,12 +38,7 @@ $guest_allowed = false;
 
 require_once '../../include/baseTheme.php';
 require_once 'include/sendMail.inc.php';
-// for logging
-require_once 'include/log.class.php';
-// For creating bbb urls & params
-require_once 'bbb-api.php';
-require_once 'om-api.php';
-require_once 'webconf-api.php';
+require_once 'include/log.class.php'; // for logging
 require_once 'functions.php';
 
 require_once 'include/lib/modalboxhelper.class.php';
@@ -50,103 +55,9 @@ $toolName = $langBBB;
 load_js('tools.js');
 load_js('bootstrap-datetimepicker');
 load_js('validation.js');
-
-$head_content .= "
-<script type='text/javascript'>
-
-// Bootstrap datetimepicker Initialization
-$(function() {
-$('input#start_session').datetimepicker({
-        format: 'dd-mm-yyyy hh:ii',
-        pickerPosition: 'bottom-right',
-        language: '" . $language . "',
-        autoclose: true
-    });
-});
-
-</script>";
-
-$head_content .= "<script type='text/javascript'>
-        $(function() {
-            $('#BBBEndDate').datetimepicker({
-                format: 'dd-mm-yyyy hh:ii',
-                pickerPosition: 'bottom-right',
-                language: '" . $language . "',
-                autoclose: true
-            }).on('changeDate', function(ev){
-                if($(this).attr('id') === 'BBBEndDate') {
-                    $('#answersDispEndDate, #scoreDispEndDate').removeClass('hidden');
-                }
-            }).on('blur', function(ev){
-                if($(this).attr('id') === 'BBBEndDate') {
-                    var end_date = $(this).val();
-                    if (end_date === '') {
-                        if ($('input[name=\"dispresults\"]:checked').val() == 4) {
-                            $('input[name=\"dispresults\"][value=\"1\"]').prop('checked', true);
-                        }
-                        $('#answersDispEndDate, #scoreDispEndDate').addClass('hidden');
-                    }
-                }
-            });
-            $('#enableEndDate').change(function() {
-                var dateType = $(this).prop('id').replace('enable', '');
-                if($(this).prop('checked')) {
-                    $('input#BBB'+dateType).prop('disabled', false);
-                    if (dateType === 'EndDate' && $('input#BBBEndDate').val() !== '') {
-                        $('#answersDispEndDate, #scoreDispEndDate').removeClass('hidden');
-                    }
-                } else {
-                    $('input#BBB'+dateType).prop('disabled', true);
-                    if ($('input[name=\"dispresults\"]:checked').val() == 4) {
-                        $('input[name=\"dispresults\"][value=\"1\"]').prop('checked', true);
-                    }
-                    $('#answersDispEndDate, #scoreDispEndDate').addClass('hidden');
-                }
-            });
-        });
-    </script>";
-
 load_js('select2');
 
-$head_content .= "<script type='text/javascript'>
-    $(document).ready(function () {
-        $('#popupattendance1').click(function() {
-	     window.open($(this).prop('href'), '', 'height=200,width=500,scrollbars=no,status=no');
-	     return false;
-	});
-
-        $('#select-groups').select2();
-        $('#selectAll').click(function(e) {
-            e.preventDefault();
-            var stringVal = [];
-            $('#select-groups').find('option').each(function(){
-                stringVal.push($(this).val());
-            });
-            $('#select-groups').val(stringVal).trigger('change');
-        });
-        $('#removeAll').click(function(e) {
-            e.preventDefault();
-            var stringVal = [];
-            $('#select-groups').val(stringVal).trigger('change');
-        });
-    });
-
-    function onAddTag(tag) {
-        alert('Added a tag: ' + tag);
-    }
-    function onRemoveTag(tag) {
-        alert('Removed a tag: ' + tag);
-    }
-
-    function onChangeTag(input,tag) {
-        alert('Changed a tag: ' + tag);
-    }
-
-    $(function() {
-        $('#tags_1').select2({tags:[], formatNoMatches: ''});
-    });
-</script>
-";
+$head_content .= '<script type="text/javascript" src="tc.js"></script>';
 
 $tc_types = tc_configured_apis(); //all available apis globally
 $tc_session_helper = new TcSessionHelper($course_id,$course_code,$tc_types);
@@ -237,6 +148,8 @@ if (isset($_GET['add'])) {
         'url' => "$_SERVER[SCRIPT_NAME]?course=$course_code",
         'name' => $langBBB
     );
+    
+    //Set up the session
     if (isset($_GET['id'])) {
         $session_id = getDirectReference($_GET['id']);
         $tc_session = $tc_session_helper->getSessionById($session_id);
@@ -245,6 +158,7 @@ if (isset($_GET['add'])) {
     } elseif (isset($_GET['session_id'])) {
         $tc_session = $tc_session_helper->getSessionById($_GET['session_id']);
     }
+    
     switch ($_GET['choice']) {
         case 'edit':
             $tool_content .= $tc_session_helper->form($session_id);
@@ -283,8 +197,6 @@ if (isset($_GET['add'])) {
             // we assume we'll only create the session once, so getting set up on a server should lock the session there
             //TODO: Add support in plugins for LOCKING a session to a server - this needs DB modification
             echo 'Checking if meeting is scheduled (known to server)...<br>';
-            //print_r($tc_session);
-            //die();
             
             if ($tc_session->IsKnownToServer()) {
                 echo 'Meeting is Known to server<br>';
@@ -323,27 +235,9 @@ if (isset($_GET['add'])) {
                 redirect_to_home_page("modules/tc/index.php?course=$course_code");
             }
 
-            // TODO: MOVE THESE TO THE PLUGINS
-            /*
-             * } elseif ($tc_type == 'om') { // if tc server is `om`
-             * if (om_session_running($_GET['meeting_id']) == false) { // create meeting
-             * create_om_meeting($_GET['title'],$_GET['meeting_id'],$_GET['record']);
-             * }
-             * if(isset($_GET['mod_pw'])) { // join moderator (== $is_editor)
-             * header('Location: ' . om_join_user($_GET['meeting_id'],$_SESSION['uname'], $_SESSION['uid'], $_SESSION['email'], $_SESSION['surname'], $_SESSION['givenname'], 1));
-             * } else { // join user
-             * header('Location: ' . om_join_user($_GET['meeting_id'],$_SESSION['uname'], $_SESSION['uid'], $_SESSION['email'], $_SESSION['surname'], $_SESSION['givenname'], 0));
-             * }
-             * } elseif ($tc_type == 'webconf') { // if tc server is `webconf`
-             * create_webconf_jnlp_file($_GET['meeting_id']);
-             * $webconf_server = $serv->hostname;
-             * $screenshare_server = $serv->screenshare;
-             * header('Location: ' . get_config('base_url') . '/modules/tc/webconf/webconf.php?user=' . $_SESSION['surname'] . ' ' . $_SESSION['givenname'].'&meeting_id='.$_GET['meeting_id'].'&base_url='. base64_encode(get_config('base_url')).'&webconf_server='. base64_encode($webconf_server).'&screenshare_server='. base64_encode($screenshare_server) .'&course='.$course_code);
-             * }
-             */
             break;
         case 'import_video':
-            $tool_content .= publish_video_recordings($course_code, getDirectReference($_GET['id']));
+            $tool_content .= $tc_session->publish_video_recordings(getDirectReference($_GET['id']));
             break;
     }
 } elseif (isset($_POST['new_bbb_session'])) { // new BBB session
@@ -356,11 +250,6 @@ if (isset($_GET['add'])) {
     }
     redirect_to_home_page("modules/tc/index.php?course=$course_code");
 } else { // display list of conferences
-    require_once 'zoom-api.php';
-    /*$za = new Zoom(['url'=>'https://api.zoom.us/v2/','key'=>'a','secret'=>'b,c']);
-    $za->x();
-    die();*/
-    
     $tool_content .= $tc_session_helper->tc_session_details();
 }
 
