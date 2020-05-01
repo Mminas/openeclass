@@ -1204,6 +1204,16 @@ class Zoom extends TcApi
         die('unimplemented');
         return true;
     }
+    
+    public function generatePassword() {
+        $length = 10; //max password length in zoom is 10
+        return substr(str_shuffle(implode(array_merge(range(0, 9), range('A', 'Z'), range('a', 'z')))), 0, $length);
+    }
+    
+    public function generateMeetingId() {
+        return NULL; //Zoom doesn't allow you to specify meeting IDs
+    }
+    
 }
 
 class TcZoomSession extends TcDbSession

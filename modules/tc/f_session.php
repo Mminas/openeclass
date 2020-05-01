@@ -504,6 +504,7 @@ class TcSessionHelper
 
             $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $session_id);
         } else { // adding new session
+            $api = $this->getApi(['server'=>$server]);
             $q = Database::get()->query("INSERT INTO tc_session SET course_id = ?d,
                                                             title = ?s,
                                                             description = ?s,
@@ -520,13 +521,13 @@ class TcSessionHelper
                                                             participants = ?s,
                                                             record = ?s,
                                                             sessionUsers = ?s", 
-                $this->course_id, $title, $desc, $start_session, $BBBEndDate, $status, $server->id, generateRandomString(), 
-                generateRandomString(), generateRandomString(), $minutes_before, $external_users, $r_group, $record, $sessionUsers);
+                $this->course_id, $title, $desc, $start_session, $BBBEndDate, $status, $server->id, $api->generateMeetingId(), 
+                $api->generatePassword(), $api->generatePassword(), $minutes_before, $external_users, $r_group, $record, $sessionUsers);
 
             if (! $q)
                 return false;
 
-            $session_id = $q->lastInsertID; 
+            $session_id = $q->lastInsertID;
             $tc_session = self::getSessionById($session_id);
             print_r($tc_session);
 
@@ -994,6 +995,7 @@ class TcSessionHelper
     {
         global $langBBBImportRecordingsOK, $langBBBImportRecordingsNo, $langBBBImportRecordingsNoNew;
         
+        //FIXME: This is a problem, if the session was moved to another server or server config changed after a recording was made, it may be irretrievable
         $sessions = Database::get()->queryArray("
             SELECT tc_session.id, tc_session.course_id AS course_id,tc_session.title, tc_session.description, tc_session.start_date,
             tc_session.meeting_id, course.prof_names 
@@ -1001,7 +1003,7 @@ class TcSessionHelper
             LEFT JOIN course ON tc_session.course_id=course.id 
             WHERE course.code=?s AND tc_session.id=?d", $this->course_id, $session_id);
         
-        $servers = Database::get()->queryArray("SELECT * FROM tc_servers WHERE enabled='true' AND `type` = 'bbb'");
+        $servers = TcServer::LoadAllByTypes($this->tc_types,true); 
         
         $perServerResult = array(); /* AYTO THA EINAI TO ID THS KATASTASHS GIA KATHE SERVER */
         
@@ -1009,29 +1011,16 @@ class TcSessionHelper
         if (($sessions) && ($servers)) {
             $msgID = array();
             foreach ($servers as $server) {
-                $salt = $server->server_key;
-                $bbb_url = $server->api_url;
+                $api = $this->getApi(['server'=>$server]);
                 
-                $bbb = new BigBlueButton($salt, $bbb_url);
                 $sessionsCounter = 0;
                 foreach ($sessions as $session) {
-                    $recordingParams = array(
-                        'meetingId' => $session->meeting_id
-                    );
-                    $ch = curl_init();
-                    $timeout = 0;
-                    curl_setopt($ch, CURLOPT_URL, $bbb->getRecordingsUrl($recordingParams));
-                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
-                    $recs = curl_exec($ch);
-                    curl_close($ch);
-                    
-                    $xml = simplexml_load_string($recs);
+                    $xml = $api->getRecordings(['meetingId' => $session->meeting_id]);
                     // If not set, it means that there is no video recording.
                     // Skip and search for next one
-                    if (isset($xml->recordings->recording /* ->playback->format->url */)) {
-                        foreach ($xml->recordings->recording as $recording) {
-                            $url = (string) $recording->playback->format->url;
+                    if ($xml && is_array($xml) && count($xml)>0 ) {
+                        foreach ($xml as $recording) {
+                            $url = $recording['playbackFormatUrl'];
                             // Check if recording already in videolinks and if not insert
                             $c = Database::get()->querySingle("SELECT COUNT(*) AS cnt FROM videolink WHERE url = ?s", $url);
                             if ($c->cnt == 0) {
@@ -1076,22 +1065,12 @@ class TcSessionHelper
 
 /**
  *
- * @brief Generate random strings. Used to create meeting_id, attendance password and moderator password
- * @param int $length
- * @return string
- */
-function generateRandomString($length = 10)
-{
-    return substr(str_shuffle(implode(array_merge(range(0, 9), range('A', 'Z'), range('a', 'z')))), 0, $length);
-}
-
-/**
- *
  * @brief function to calculate date diff in minutes in order to enable join link
  * @param string $start_date
  * @param string $current_date
  * @return int
  */
+//FIXME: This is used in ext.php, fix that
 function date_diff_in_minutes($start_date, $current_date)
 {
     return round((strtotime($start_date) - strtotime($current_date)) / 60);

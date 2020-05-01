@@ -569,6 +569,25 @@ class BigBlueButton extends TcApi
     public function clearCaches() {
         self::$sessionInfoCache = null;
     }
+    
+    public function generatePassword() {
+        return $this->generateRandomString();
+    }
+    
+    public function generateMeetingId() {
+        return $this->generateRandomString();
+    }
+    
+    /**
+     *
+     * @brief Generate random strings. Used to create meeting_id, attendance password and moderator password
+     * @param int $length
+     * @return string
+     */
+    private function generateRandomString($length = 10)
+    {
+        return substr(str_shuffle(implode(array_merge(range(0, 9), range('A', 'Z'), range('a', 'z')))), 0, $length);
+    }
 }
 
 /**
@@ -640,7 +659,7 @@ class TcBigBlueButtonSession extends TcDbSession
      */
     function get_meeting_users($pw)
     {
-        global $langBBBGetUsersError, $langBBBConnectionError, $course_code;
+        //global $langBBBGetUsersError, $langBBBConnectionError, $course_code;
 
         // Instantiate the BBB class:
         $bbb = new BigBlueButton([
@@ -781,7 +800,7 @@ class TcBigBlueButtonSession extends TcDbSession
      */
     function start_meeting()
     {
-        global $course_code, $langBBBWelcomeMsg;
+        global $langBBBWelcomeMsg;
 
         //If a maximum limit of simultaneous meeting users has been set, use it
         if (!$this->sessionUsers || $this->sessionUsers <= 0) {

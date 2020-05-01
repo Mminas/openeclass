@@ -168,6 +168,10 @@ abstract class TcApi
     public abstract function deleteRecordings($recordingParams);
 
     public abstract function clearCaches();
+    
+    public abstract function generatePassword();
+    
+    public abstract function generateMeetingId(); 
 }
 
 /**
