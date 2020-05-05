@@ -89,6 +89,8 @@ class BigBlueButton extends TcApi
             if (array_key_exists('salt', $params))
                 $this->_securitySalt = $params['salt'];
         }
+        else
+            die(__METHOD__.': Wrong initialization');
     }
 
     /*
@@ -109,8 +111,9 @@ class BigBlueButton extends TcApi
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
             $data = curl_exec($ch);
             if ($data === false) {
+                $err = curl_error($ch);
                 curl_close($ch);
-                throw new \RuntimeException('Unhandled curl error: ' . curl_error($ch));
+                throw new \RuntimeException('Unhandled curl error: ' . $err);
             }
             if ($data === '') {
                 var_dump($data);
@@ -587,6 +590,17 @@ class BigBlueButton extends TcApi
     private function generateRandomString($length = 10)
     {
         return substr(str_shuffle(implode(array_merge(range(0, 9), range('A', 'Z'), range('a', 'z')))), 0, $length);
+    }
+    
+    public function getServerUsers(TcServer $server) {
+        $meetings = $this->getMeetings();
+        $count = 0;
+        if ( array_key_exists('meetings',$meetings) )
+            foreach($meetings['meetings'] as $m) {
+                //echo '<pre>'.var_export($m).'</pre>';
+                $count += $m['participantCount'];
+            }
+        return $count;
     }
 }
 

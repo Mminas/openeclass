@@ -18,7 +18,7 @@
                 </thead>
         @foreach ($bbb_servers as $bbb_server)
             <tr>
-                <td>{{ $bbb_server->type }}</td>
+                <td>{{ $bbb_server->type }} ({{ $bbb_server->id }})</td>
                 <td>{{ $bbb_server->api_url }}</td>
                 <td class='text-center'>{{ $bbb_server->enabled ? trans('langYes') : trans('langNo') }}</td>
                 <td class='text-center'>{{ $bbb_server->get_connected_users() }}</td>

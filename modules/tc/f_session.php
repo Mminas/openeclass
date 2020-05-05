@@ -19,12 +19,6 @@ class TcSessionHelper
     const MAX_USERS_RECOMMENDATION_RATIO = 2;
 
     // recommends USERS/RATIO to user
-    const AVAILABLE_APIS = [
-        'bbb' => 'BigBlueButton',
-        'om' => 'OpenMeetings',
-        'webconf' => 'WebConf',
-        'zoom' => 'Zoom'
-    ];
 
     /**
      *
@@ -50,7 +44,7 @@ class TcSessionHelper
 
     public function getApi(array $params = [])
     {
-        $apiclassname = self::AVAILABLE_APIS[$this->tc_type];
+        $apiclassname = TcApi::AVAILABLE_APIS[$this->tc_type];
         require_once $this->tc_type . '-api.php';
         return new $apiclassname($params);
     }
@@ -61,7 +55,7 @@ class TcSessionHelper
                         INNER JOIN tc_session ON tc_session.running_at=tc_servers.id 
                         WHERE tc_session.id=?d",$id);
         if ( $q ) {
-            $classname = self::AVAILABLE_APIS[$q->type];
+            $classname = TcApi::AVAILABLE_APIS[$q->type];
             require_once $q->type . '-api.php';
         }
         else { //probably null running_at field

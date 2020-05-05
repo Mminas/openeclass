@@ -1214,6 +1214,11 @@ class Zoom extends TcApi
         return NULL; //Zoom doesn't allow you to specify meeting IDs
     }
     
+    public function getServerUsers(TcServer $server) {
+        return 0; //You need dashboard information for this
+    }
+    
+    
 }
 
 class TcZoomSession extends TcDbSession

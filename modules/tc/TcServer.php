@@ -1,5 +1,7 @@
 <?php
 
+require_once "TcApi.php";
+
 class TcServer
 {
 
@@ -111,56 +113,19 @@ class TcServer
         return false;
     }
 
-    /**
-     *
-     * @brief check if bbb server is available
-     * @param int $users_to_join
-     *            -- The number of participants to join
-     * @return boolean
-     */
-    function available($users_to_join)
-    {
-        if (! $this->enabled)
-            return false;
-
-        $max_rooms = $this->max_rooms;
-        $max_users = $this->max_users;
-
-        $bbb = new BigBlueButton([
-            'server' => $this->data
-        ]);
-
-        $meetings = $bbb->getMeetings();
-        if (! $meetings)
-            return false;
-
-        $connected_users = 0;
-        $active_rooms = 0;
-
-        // echo 'MEETING XML:<br>';
-        // print_r($meetings);
-        if (array_key_exists('meetings', $meetings)) {
-            foreach ($meetings['meetings'] as $meeting) {
-                // echo 'MEETING<br><br>';
-                // print_r($meeting);
-                $mid = $meeting['meetingID'];
-                if ($mid != null) {
-                    $active_rooms ++;
-                    $connected_users += $meeting['participantCount'];
-                }
-            }
-        }
-
-        // good cases:
-        // max_users = 0 && max_rooms = 0 - UNLIMITED
-        // active_rooms < max_rooms && active_users < max_users
-        // active_rooms < max_rooms && max_users = 0 (UNLIMITED)
-        // active_users < max_users && max_rooms = 0 (UNLIMITED)
-        return (($max_rooms == 0 && $max_users == 0) || (($max_users >= ($users_to_join + $connected_users)) and $active_rooms <= $max_rooms) || ($active_rooms <= $max_rooms and $max_users == 0) || (($max_users >= ($users_to_join + $connected_users)) && $max_rooms == 0));
-    }
-
     public function get_connected_users()
     {
-        return 'NOT IMPLEMENTED';
+        //return var_export($this,true);
+        $className = TcApi::AVAILABLE_APIS[$this->type];
+        require_once $this->type.'-api.php';
+        
+        $api = new $className(['server'=>$this]);
+        try {
+            $x = $api->getServerUsers($this);
+            return $x;
+        }
+        catch(Exception $e) {
+            return "Error: ".$e->getMessage();
+        }
     }
 }

@@ -2,7 +2,14 @@
 
 abstract class TcApi
 {
-
+    const AVAILABLE_APIS = [
+        'bbb' => 'BigBlueButton',
+        'om' => 'OpenMeetings',
+        'webconf' => 'WebConf',
+        'zoom' => 'Zoom'
+    ];
+    
+    
     public abstract function __construct($params = []);
 
     /*
@@ -171,7 +178,9 @@ abstract class TcApi
     
     public abstract function generatePassword();
     
-    public abstract function generateMeetingId(); 
+    public abstract function generateMeetingId();
+    
+    public abstract function getServerUsers(TcServer $server);
 }
 
 /**
@@ -470,18 +479,7 @@ abstract class TcDbSession
 
         return $total;
     }
-
-    /**
-     *
-     * @brief create join as moderator/user link
-     * --@param string $meeting_id
-     * --@param string $mod_pw
-     * --@param string $att_pw
-     * --@param string $username
-     * --@param string $name
-     * --@return string
-     */
-    public abstract function join_user(array $joinParams);
+    
 }
 
 
