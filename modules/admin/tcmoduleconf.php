@@ -160,12 +160,11 @@ elseif (isset($_GET['add_server']) || isset($_GET['edit_server'])) { //SHOW CREA
     }
     $data['listcourses'] = $listcourses;
     $view = 'admin.other.extapps.bbb.create';
-} else {    // Display config edit form
-
+} else { 
     //display available BBB servers
     $data['action_bar'] = action_bar(array(
         array('title' => $langAddServer,
-            'url' => "bbbmoduleconf.php?add_server",
+            'url' => "tcmoduleconf.php?add_server",
             'icon' => 'fa-plus-circle',
             'level' => 'primary-label',
             'button-class' => 'btn-success'),
