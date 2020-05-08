@@ -190,7 +190,7 @@ if (isset($_GET['add'])) {
         case 'do_join':
             $serv = $tc_session->getRunningServer();
             if (! $serv) {
-                die('This session is not running on any server.');
+                die("This session is not running on any server. I don't know where to check...");
             }
 
             // gotta be careful here - we want to put all participants in the same session, not split them around servers

@@ -101,14 +101,20 @@ class TcSessionHelper
             // $running_at = $row->running_at; -- UNUSED
             $unlock_interval = $row->unlock_interval;
             $r_group = explode(",", $row->participants);
+
             $start_date = DateTime::createFromFormat('Y-m-d H:i:s', $row->start_date);
-            $start_session = q($start_date->format('d-m-Y H:i'));
+            if ( $row->start_date == '0000-00-00 00:00:00' || $start_date === FALSE)
+                $start_session = NULL;
+            else
+                $start_session = q($start_date->format('d-m-Y H:i'));
+            
+            
             $end_date = DateTime::createFromFormat('Y-m-d H:i:s', $row->end_date);
-            if (isset($row->end_date)) {
-                $BBBEndDate = $end_date->format('d-m-Y H:i');
-            } else {
+            if ( $row->end_date == '0000-00-00 00:00:00' || $end_date === FALSE)
                 $BBBEndDate = NULL;
-            }
+            else
+                $BBBEndDate = $end_date->format('d-m-Y H:i');
+            
             $enableEndDate = Session::has('BBBEndDate') ? Session::get('BBBEndDate') : ($BBBEndDate ? 1 : 0);
 
             $textarea = rich_text_editor('desc', 4, 20, $row->description);
@@ -381,6 +387,9 @@ class TcSessionHelper
      */
     public function process_form($session_id = 0)
     {
+        global $langBBBScheduledSession, $langBBBScheduleSessionInfo, $langBBBScheduleSessionInfo2, $langBBBScheduleSessionInfoJoin,
+        $langAvailableBBBServers, $langDescription, $urlServer;
+        
         if (isset($_POST['enableEndDate']) and ($_POST['enableEndDate'])) {
             $endDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['BBBEndDate']);
             $end = $endDate_obj->format('Y-m-d H:i:s');
@@ -412,6 +421,11 @@ class TcSessionHelper
 
         if (isset($_POST['groups'])) {
             $r_group = $_POST['groups'];
+            if (is_array($r_group) && count($r_group) > 0) {
+                $r_group = implode(',', $r_group);
+            } else {
+                $r_group = '0';
+            }
         } else {
             $r_group = '0';
         }
@@ -420,111 +434,68 @@ class TcSessionHelper
             $this->tc_types = [];
             foreach($_POST['type'] as $t) {
                 $t = strtolower(trim($t));
-                if ( !array_key_exists($t,self::AVAILABLE_APIS) )
+                if ( !array_key_exists($t,TcApi::AVAILABLE_APIS) )
                     die('Invalid form data');
                 $this->tc_types[] = $t;
             }
         }
         
-        return $this->add_update($_POST['title'], $_POST['desc'], $start, $end, $_POST['status'], $notifyUsers, $notifyExternalUsers, 
-            $addAnnouncement, $_POST['minutes_before'], $ext_users, $record, $_POST['sessionUsers'], $r_group, $session_id);
-    }
 
-    /**
-     *
-     * @brief Insert scheduled session data into database
-     * @global string $langBBBAddSuccessful
-     * @global string $langBBBScheduledSession
-     * @global string $langBBBScheduleSessionInfo
-     * @global string $langBBBScheduleSessionInfoJoin
-     * @param string $title
-     * @param string $desc
-     * @param string $start_session
-     *            -- startDate in DB
-     * @param string $BBBEndDate
-     * @param int $status
-     *            -- 1/0 (active)
-     * @param string $notifyUsers
-     *            -- "1" / "0" -- beyond booleans (tm)
-     * @param string $notifyExternalUsers
-     *            -- "1" / "0"
-     * @param string $addAnnouncement
-     *            -- "1" / "0"
-     * @param int $minutes_before
-     *            -- unlock_interval in DB
-     * @param string $external_users
-     * @param string $record
-     *            --"true" / "false" -- gods help us
-     * @param int $sessionUsers
-     * @param array $groups
-     *            - array of: 0=all users, _X=group id X, X=user X
-     * @param int $session_id
-     * @return bool
-     */
-    function add_update($title, $desc, $start_session, $BBBEndDate, $status, $notifyUsers, $notifyExternalUsers, 
-        $addAnnouncement, $minutes_before, $external_users, $record, $sessionUsers, $groups, $session_id = 0)
-    {
-        global $langBBBScheduledSession, $langBBBScheduleSessionInfo, $langBBBScheduleSessionInfo2, $langBBBScheduleSessionInfoJoin,
-        $langAvailableBBBServers, $langDescription, $urlServer;
+        $data = [
+            'sessionId' => $session_id,
+            
+            
+            'course_id' => $this->course_id,
+            //'meeting_id' => , //this should be loaded if session_id is valid, otherwise a new one should be generated internally later
+            
+            'title'=>trim($_POST['title']),
+            'description'=>trim($_POST['desc']),
+            'start_date'=>$start,
+            'end_date'=>$end,
+            'public'=>true, //FIXME: WHY?
+            'active'=>$_POST['status']=='1',
+            //'running_at'=>????,
+            //'mod_pw'=>???,
+            //'att_pw'=>???,
+            'unlock_interval'=>$_POST['minutes_before'],
+            'external_users'=>$ext_users,
+            'participants'=>$r_group,
+            'record'=>$record=='true',
+            'sessionUsers'=>(int) $_POST['sessionUsers'],
+        ];
+        //echo "<hr><pre>POST:\n".var_export($_POST,true).'</pre>';
+        //echo "<hr><pre>DATA:\n".var_export($data,true).'</pre>';
 
-        //Take this opportunity to re-select a server. Also, the type may have changed.
-        $server = $this->pickServer();
+        //Now (re-)/select a server. The type may have changed, so your current server is now invalid.
+        //This is done *specifically* by TcDBSession, so we get a server type to use for class instantiation
+        $server = TcDBSession::pickServer($this->tc_types,$this->course_id); 
         if ( !$server ) {
             Session::Messages($langAvailableBBBServers, 'alert-danger');
             return false;
         }
         
-        if (is_array($groups) && count($groups) > 0) {
-            $r_group = implode(',', $groups);
-        } else {
-            $r_group = '0';
-        }
+        //now we have a server and therefore a type so convert to proper class
+        require_once $server->type.'-api.php';
+        $classname = 'Tc'. TcApi::AVAILABLE_APIS[$server->type] .'Session';
+        $tc_session = new $classname($data);
+        
+        //echo "<hr><pre>Actual session:\n".var_export($tc_session->data,true).'</pre>';
+        
+        //TODO: This should update the remote side as well
+        $tc_session->save(); 
+        
         if ($session_id != 0) { // updating/editing session
-            $q = Database::get()->querySingle("UPDATE tc_session SET title=?s, description=?s, start_date=?t, end_date=?t,
-                                        public=?s, active=?s, unlock_interval=?d, external_users=?s,running_at=?d,
-                                        participants=?s, record=?s, sessionUsers=?d WHERE id=?d", $title, $desc, $start_session, 
-                                        $BBBEndDate, 1, $status, $minutes_before, $external_users,$server->id,
-                                        $r_group, $record, $sessionUsers, $session_id);
-
-            if ($q === NULL)
-                return false;
-
             // logging
             Log::record($this->course_id, MODULE_ID_TC, LOG_MODIFY, array(
                 'id' => $session_id,
-                'title' => $title,
-                'desc' => html2text($desc)
+                'title' => $tc_session->title,
+                'desc' => html2text($tc_session->description)
             ));
 
             $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $session_id);
         } else { // adding new session
-            $api = $this->getApi(['server'=>$server]);
-            $q = Database::get()->query("INSERT INTO tc_session SET course_id = ?d,
-                                                            title = ?s,
-                                                            description = ?s,
-                                                            start_date = ?t,
-                                                            end_date = ?t,
-                                                            public = 1,
-                                                            active = ?s,
-                                                            running_at = ?d,
-                                                            meeting_id = ?s,
-                                                            mod_pw = ?s,
-                                                            att_pw = ?s,
-                                                            unlock_interval = ?s,
-                                                            external_users = ?s,
-                                                            participants = ?s,
-                                                            record = ?s,
-                                                            sessionUsers = ?s", 
-                $this->course_id, $title, $desc, $start_session, $BBBEndDate, $status, $server->id, $api->generateMeetingId(), 
-                $api->generatePassword(), $api->generatePassword(), $minutes_before, $external_users, $r_group, $record, $sessionUsers);
-
-            if (! $q)
-                return false;
-
-            $session_id = $q->lastInsertID;
-            $tc_session = self::getSessionById($session_id);
-            print_r($tc_session);
-
+            //echo "<pre>Actual session:\n".var_export($tc_session,true).'</pre>';
+            die();
             if (! $tc_session->create_meeting([
                 'meetingId'=>$tc_session->meeting_id,
                 'meetingName'=>$tc_session->title,
@@ -546,33 +517,36 @@ class TcSessionHelper
 
             $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $q->lastInsertID);
         }
+        
+        //TIME FOR NOTIFICATIONS
+        
         $new_title = $q->title;
         $new_att_pw = $q->att_pw;
         // if we have to notify users for new session
-        if ($notifyUsers == "1" && is_array($groups) and count($groups) > 0) {
+        if ($notifyUsers == "1" && is_array($r_group) and count($r_group) > 0) {
             $recipients = array();
-            if (in_array(0, $groups)) { // all users
+            if (in_array(0, $r_group)) { // all users
                 $result = Database::get()->queryArray("SELECT cu.user_id, u.email FROM course_user cu
                                                     JOIN user u ON cu.user_id=u.id
                                                 WHERE cu.course_id = ?d
                                                 AND u.email <> ''
                                                 AND u.email IS NOT NULL", $this->course_id);
             } else {
-                $r_group = '';
-                foreach ($groups as $group) {
+                $r_group2 = '';
+                foreach ($r_group as $group) {
                     if ($group[0] == '_') { // find group users (if any) - groups start with _
                         $g_id = intval((substr($group, 1, strlen($group))));
                         $q = Database::get()->queryArray("SELECT user_id FROM group_members WHERE group_id = ?d", $g_id);
                         if ($q) {
                             foreach ($q as $row) {
-                                $r_group .= "'$row->user_id'" . ',';
+                                $r_group2 .= "'$row->user_id'" . ',';
                             }
                         }
                     } else {
-                        $r_group .= "'$group'" . ',';
+                        $r_group2 .= "'$group'" . ',';
                     }
                 }
-                $r_group = rtrim($r_group, ',');
+                $r_group2 = rtrim($r_group2, ',');
                 $result = Database::get()->queryArray("SELECT course_user.user_id, user.email
                                                         FROM course_user, user
                                                    WHERE course_id = ?d AND user.id IN ($r_group) AND
@@ -594,7 +568,7 @@ class TcSessionHelper
                 $emailheader = "
                 <div id='mail-header'>
                     <div>
-                        <div id='header-title'>$langBBBScheduleSessionInfo" . q($title) . " $langBBBScheduleSessionInfo2" . q($start_session) . "</div>
+                        <div id='header-title'>$langBBBScheduleSessionInfo" . q($tc_session->title) . " $langBBBScheduleSessionInfo2" . q($tc_session->start_date) . "</div>
                     </div>
                 </div>
             ";
@@ -603,7 +577,7 @@ class TcSessionHelper
             <div id='mail-body'>
                 <div><b>$langDescription:</b></div>
                 <div id='mail-body-inner'>
-                    $desc
+                    $tc_session->description
                     <br><br>$langBBBScheduleSessionInfoJoin:<br><a href='$bbblink'>$bbblink</a>
                 </div>
             </div>
@@ -618,13 +592,13 @@ class TcSessionHelper
 
         // Notify external users for new bbb session
         if ($notifyExternalUsers == "1") {
-            if (isset($external_users)) {
-                $recipients = explode(',', $external_users);
+            if (isset($ext_users)) {
+                $recipients = explode(',', $ext_users);
                 $emailsubject = $langBBBScheduledSession;
                 $emailheader = "
                     <div id='mail-header'>
                         <div>
-                            <div id='header-title'>$langBBBScheduleSessionInfo" . q($title) . " $langBBBScheduleSessionInfo2" . q($start_session) . "</div>
+                            <div id='header-title'>$langBBBScheduleSessionInfo" . q($tc_session->title) . " $langBBBScheduleSessionInfo2" . q($tc_session->start_date) . "</div>
                         </div>
                     </div>
                 ";
@@ -636,7 +610,7 @@ class TcSessionHelper
                 <div id='mail-body'>
                     <div><b>$langDescription:</b></div>
                     <div id='mail-body-inner'>
-                        $desc
+                        $tc_session->description
                         <br><br>$langBBBScheduleSessionInfoJoin:<br><a href='$bbblink'>$bbblink</a>
                     </div>
                 </div>
@@ -653,8 +627,8 @@ class TcSessionHelper
                                                    WHERE course_id = ?d", $this->course_id)->maxorder;
             $order = $orderMax + 1;
             Database::get()->querySingle("INSERT INTO announcement (content,title,`date`,course_id,`order`,visible)
-                                    VALUES ('" . $langBBBScheduleSessionInfo . " \"" . q($title) . "\" " . $langBBBScheduleSessionInfo2 . " " . $start_session . "',
-                                             '$langBBBScheduledSession', " . DBHelper::timeAfter() . ", ?d, ?d, '1')", $this->course_id, $order);
+                                    VALUES ('" . $langBBBScheduleSessionInfo . " \"" . q($tc_session->title) . "\" " . $langBBBScheduleSessionInfo2 . " " . 
+                                    $tc_session->start_date . "','$langBBBScheduledSession', " . DBHelper::timeAfter() . ", ?d, ?d, '1')", $this->course_id, $order);
         }
 
         return true; // think positive
@@ -950,26 +924,6 @@ class TcSessionHelper
         } else { // no active tc_servers
             return false;
         }
-    }
-    
-    /**
-     *  @brief Pick a server for a new session based on all available information for the course
-     */
-    function pickServer() {
-        $types = $this->tc_types;
-        array_walk($types,function(&$value) { $value = '"'.$value.'"'; });
-        $types = implode(',',$types);
-        $t = Database::get()->querySingle("SELECT tcs.* FROM course_external_server ces 
-                INNER JOIN tc_servers tcs ON tcs.id=ces.external_server
-                WHERE ces.course_id = ?d AND tcs.type IN(".$types.") AND enabled='true' 
-                ORDER BY tcs.weight ASC", $this->course_id);
-        if ($t) { //course uses specific tc_servers
-            $server = $t;
-        } else { // will use default tc_server
-            //get type first via the servers table
-            $server = Database::get()->querySingle("SELECT * FROM tc_servers WHERE `type` IN(".$types.") and enabled = 'true' ORDER BY weight ASC");
-        }
-        return $server;
     }
     
     private function get_join_link($url,$session_id, $additionalParams=[]) {

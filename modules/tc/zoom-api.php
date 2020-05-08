@@ -1,7 +1,4 @@
 <?php
-use phpDocumentor\Reflection\Types\Integer;
-use Mpdf\Tag\THead;
-use phpDocumentor\Reflection\Types\This;
 
 require_once 'TcApi.php';
 require_once 'paramsTrait.php';
@@ -730,8 +727,6 @@ class Zoom extends TcApi
         ]
     ];
 
-    private static $_cache = [];
-
     private $_ApiUrl;
 
     private $_ApiKey;
@@ -829,6 +824,10 @@ class Zoom extends TcApi
 
     public function SendApiCall($operation, $params)
     {
+        $x = parent::cacheLoad($operation.'_'.implode('_',$params));
+        if ( $x )
+            return $x;
+            
         // $jwt = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOm51bGwsImlzcyI6InFGQll5a0puUXEyNVVKaHZLV2VrTFEiLCJleHAiOjE1ODgwNzU0NTUsImlhdCI6MTU4NzQ3MDYzMH0.-zH-b0ZbeLoeN0jNRws212EMI8i89mXFI5Y6uSQW7iY';
         if (! $this->_jwt)
             $this->generateJWT();
@@ -914,7 +913,9 @@ class Zoom extends TcApi
 
             if (array_key_exists('body', $syntax['response'][$code]) || array_key_exists('headers', $syntax['response'][$code])) {
                 // TODO: Do headers, too
-                return $this->_processResponse($syntax['response'][$code]['body'], $response);
+                $x=$this->_processResponse($syntax['response'][$code]['body'], $response);
+                parent::cacheStore($operation.'_'.implode('_',$params),$x);
+                return $x;
             } else {
                 return false; // whoops, nothing to return!
             }
@@ -1071,11 +1072,6 @@ class Zoom extends TcApi
     {
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
         
-        if ( isset(self::$_cache['meetings'][$infoParams['meetingId']]) ) {
-            echo 'CACHED meeting info '.$infoParams['meetingId'];
-            return self::$_cache['meetings'][$infoParams['meetingId']];
-        }
-        
         $x = $this->SendApiCall('getmeeting', [
             'meetingId' => $infoParams['meetingId']
         ]);
@@ -1205,12 +1201,12 @@ class Zoom extends TcApi
         return true;
     }
     
-    public function generatePassword() {
+    public static function generatePassword() {
         $length = 10; //max password length in zoom is 10
         return substr(str_shuffle(implode(array_merge(range(0, 9), range('A', 'Z'), range('a', 'z')))), 0, $length);
     }
     
-    public function generateMeetingId() {
+    public static function generateMeetingId() {
         return NULL; //Zoom doesn't allow you to specify meeting IDs
     }
     
@@ -1426,7 +1422,7 @@ class TcZoomSession extends TcDbSession
     function create_meeting()
     {
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        global $course_code, $langBBBWelcomeMsg;
+        global $langBBBWelcomeMsg;
 
         // If a maximum limit of simultaneous meeting users has been set, use it
         if (! $this->sessionUsers || $this->sessionUsers <= 0) {

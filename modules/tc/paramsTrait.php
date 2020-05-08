@@ -8,47 +8,52 @@ trait paramsTrait
         $validparams = array();
 
         // check required first
-        foreach ($params['required'] as $pk => $pn) {
-            if (is_numeric($pk)) {
-                $x = explode(':', $pn);
-                $incomingidx = $x[0];
-            } else {
-                $x = explode(':', $pk);
-                $incomingidx = $pn;
-            }
-            $name = $x[0];
-            $p = $this->_requiredParam($incomingidx, $incoming);
-            if (count($x) > 1) {
-                if (! $this->_checkParamType($p, $x[1])) {
-                    throw new Exception('Invalid parameter type for ' . $name . var_export($incoming, true));
+        if ( array_key_exists('required',$params) ) {
+            foreach ($params['required'] as $pk => $pn) {
+                if (is_numeric($pk)) {
+                    $x = explode(':', $pn);
+                    $incomingidx = $x[0];
+                } else {
+                    $x = explode(':', $pk);
+                    $incomingidx = $pn;
                 }
+                $name = $x[0];
+                $p = $this->_requiredParam($incomingidx, $incoming);
+                if (count($x) > 1) {
+                    if (! $this->_checkParamType($p, $x[1])) {
+                        throw new Exception('Invalid parameter type for ' . $name . var_export($incoming, true));
+                    }
+                }
+    
+                $validparams[$name] = $p;
             }
-
-            $validparams[$name] = $p;
         }
 
         // now check optionals and remove blank ones
-        foreach ($params['optional'] as $pk => $pn) {
-            
-            if (is_numeric($pk)) {
-                $x = explode(':', $pn);
-                $incomingidx = $x[0];
-            } else {
-                $x = explode(':', $pk);
-                $incomingidx = $pn;
-            }
-            $name = $x[0];
-            if (! array_key_exists($incomingidx, $incoming))
-                continue;
-            $p = $incoming[$incomingidx];
-            if (trim($p) === '')
-                continue; // next param. Skip this one, it's blank
-            if (count($x) > 1) {
-                if (! $this->_checkParamType($p, $x[1])) {
-                    throw new Exception('Invalid parameter type for ' . $name . '! ' . var_export($incoming, true));
+        if ( array_key_exists('optional',$params) ) {
+            foreach ($params['optional'] as $pk => $pn) {
+                
+                if (is_numeric($pk)) {
+                    $x = explode(':', $pn);
+                    $incomingidx = $x[0];
+                } else {
+                    $x = explode(':', $pk);
+                    $incomingidx = $pn;
                 }
+                $name = $x[0];
+                if (! array_key_exists($incomingidx, $incoming)) {
+                    continue;
+                }
+                $p = $incoming[$incomingidx];
+                if ( is_string($p) && trim($p) === '')
+                    continue; // next param. Skip this one, it's blank
+                if (count($x) > 1) {
+                    if (! $this->_checkParamType($p, $x[1])) {
+                        throw new Exception('Invalid parameter type for ' . $name . '! Expected '.$x[1].'! ' . var_export($incoming, true));
+                    }
+                }
+                $validparams[$name] = $p;
             }
-            $validparams[$name] = $p;
         }
 
         return $validparams;
@@ -61,8 +66,10 @@ trait paramsTrait
             if (count($options) < 2)
                 die('Invalid typespec ' . $typespec);
             return in_array($value, $options, true);
-        } elseif ($typespec === 'number') {
+        } elseif ($typespec === 'number' ) {
             return is_numeric($value);
+        } elseif ($typespec === 'integer' ) {
+            return is_integer($value);
         } elseif ($typespec === 'bool') {
             return is_bool($value);
         } elseif ($typespec === 'boolstr') {
@@ -88,7 +95,7 @@ trait paramsTrait
         }
 
         if (! isset($param) || $param == '') {
-            throw new Exception('Missing parameter!');
+            throw new Exception('Missing parameter '.$param.'!');
         } else
             return $param;
     }

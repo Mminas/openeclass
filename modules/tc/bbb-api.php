@@ -20,15 +20,13 @@
  * e-mail: info@openeclass.org
  * ========================================================================
  */
-require 'TcApi.php';
-require 'paramsTrait.php';
+require_once 'TcApi.php';
+require_once 'paramsTrait.php';
 
 class BigBlueButton extends TcApi
 {
     use paramsTrait;
 
-    private static $sessionInfoCache = null;
-    
     private $_bbbServerBaseUrl;
 
     private $_securitySalt;
@@ -88,9 +86,8 @@ class BigBlueButton extends TcApi
                 $this->_bbbServerBaseUrl = $params['url'];
             if (array_key_exists('salt', $params))
                 $this->_securitySalt = $params['salt'];
-        }
-        else
-            die(__METHOD__.': Wrong initialization');
+        } else
+            die(__METHOD__ . ': Wrong initialization');
     }
 
     /*
@@ -124,9 +121,7 @@ class BigBlueButton extends TcApi
             curl_close($ch);
 
             $element = new SimpleXMLElement($data);
-            echo '<pre>';
-            print_r($element);
-            echo '</pre>';
+            echo '<pre style="text-align:left">'.var_export($element,true).'</pre>';
             return $element;
         } else
             return simplexml_load_file($url);
@@ -139,12 +134,7 @@ class BigBlueButton extends TcApi
      * -- join
      * -- end
      */
-
-    /*
-     * USAGE:
-     * (see $creationParams array in createMeetingArray method.)
-     */
-    public function getCreateMeetingUrl($creationParams)
+    public function createMeeting($creationParams)
     {
         if (! array_key_exists('guestPolicy', $creationParams))
             $creationParams['guestPolicy'] = 'ASK_MODERATOR';
@@ -154,12 +144,8 @@ class BigBlueButton extends TcApi
             $val = $idx . '=' . urlencode($val);
         });
         $params = implode('&', $params);
-        return $this->_bbbServerBaseUrl . "api/create?" . $params . '&checksum=' . sha1("create" . $params . $this->_securitySalt);
-    }
-
-    public function createMeeting($creationParams)
-    {
-        $xml = $this->_processXmlResponse($this->getCreateMeetingURL($creationParams));
+        $url = $this->_bbbServerBaseUrl . "api/create?" . $params . '&checksum=' . sha1("create" . $params . $this->_securitySalt);
+        $xml = $this->_processXmlResponse($url);
 
         if ($xml) {
             if ($xml->meetingID) {
@@ -228,25 +214,14 @@ class BigBlueButton extends TcApi
      * 'password' => 'mp' -- REQUIRED - The moderator password for the meeting
      * );
      */
-    public function getEndMeetingURL($endParams)
+    public function endMeeting($endParams)
     {
         $this->_meetingId = $this->_requiredParam($endParams['meetingId']);
         $this->_password = $this->_requiredParam($endParams['password']);
         $endUrl = $this->_bbbServerBaseUrl . "api/end?";
         $params = 'meetingID=' . urlencode($this->_meetingId) . '&password=' . urlencode($this->_password);
-        return $endUrl . $params . '&checksum=' . sha1("end" . $params . $this->_securitySalt);
-    }
-
-    /*
-     * USAGE:
-     * $endParams = array (
-     * 'meetingId' => '1234', -- REQUIRED - The unique id for the meeting
-     * 'password' => 'mp' -- REQUIRED - The moderator password for the meeting
-     * );
-     */
-    public function endMeeting($endParams)
-    {
-        $xml = $this->_processXmlResponse($this->getEndMeetingURL($endParams));
+        $url = $endUrl . $params . '&checksum=' . sha1("end" . $params . $this->_securitySalt);
+        $xml = $this->_processXmlResponse($url);
         if ($xml) {
             return array(
                 'returncode' => $xml->returncode,
@@ -270,36 +245,18 @@ class BigBlueButton extends TcApi
      * USAGE:
      * $meetingId = '1234' -- REQUIRED - The unique id for the meeting
      */
-    public function getIsMeetingRunningUrl($meetingId)
+    public function isMeetingRunning($meetingId)
     {
         $this->_meetingId = $this->_requiredParam($meetingId);
         $runningUrl = $this->_bbbServerBaseUrl . "api/isMeetingRunning?";
         $params = 'meetingID=' . urlencode($this->_meetingId);
-        return $runningUrl . $params . '&checksum=' . sha1("isMeetingRunning" . $params . $this->_securitySalt);
-    }
+        $url = $runningUrl . $params . '&checksum=' . sha1("isMeetingRunning" . $params . $this->_securitySalt);
 
-    /*
-     * USAGE:
-     * $meetingId = '1234' -- REQUIRED - The unique id for the meeting
-     */
-    public function isMeetingRunning($meetingId)
-    {
-        $xml = $this->_processXmlResponse($this->getIsMeetingRunningUrl($meetingId));
+        $xml = $this->_processXmlResponse($url);
         if ($xml) {
             return $xml->running == 'true';
         }
         return null;
-    }
-
-    /*
-     * Simply formulate the getMeetings URL
-     * We do this in a separate function so we have the option to just get this
-     * URL and print it if we want for some reason.
-     */
-    public function getGetMeetingsUrl()
-    {
-        $getMeetingsUrl = $this->_bbbServerBaseUrl . "api/getMeetings?checksum=" . sha1("getMeetings" . $this->_securitySalt);
-        return $getMeetingsUrl;
     }
 
     /*
@@ -309,7 +266,7 @@ class BigBlueButton extends TcApi
      */
     public function getMeetings()
     {
-        $xml = $this->_processXmlResponse($this->getGetMeetingsUrl());
+        $xml = $this->_processXmlResponse($this->_bbbServerBaseUrl . "api/getMeetings?checksum=" . sha1("getMeetings" . $this->_securitySalt));
         if ($xml) {
             // If we don't get a success code, stop processing and return just the returncode:
             if ($xml->returncode != 'SUCCESS') {
@@ -350,41 +307,21 @@ class BigBlueButton extends TcApi
      * //'password' => 'mp' -- REQUIRED - The moderator password for the meeting
      * );
      */
-    public function getMeetingInfoUrl($infoParams)
-    {
-        $this->_meetingId = $this->_requiredParam($infoParams['meetingId']);
-        // $this->_password = $this->_requiredParam($infoParams['password']);
-        $infoUrl = $this->_bbbServerBaseUrl . "api/getMeetingInfo?";
-
-        $params = 'meetingID=' . urlencode($this->_meetingId);
-        // '&password='.urlencode($this->_password);
-
-        return $infoUrl . $params . '&checksum=' . sha1("getMeetingInfo" . $params . $this->_securitySalt);
-    }
-
-    /*
-     * USAGE:
-     * $infoParams = array(
-     * 'meetingId' => '1234', -- REQUIRED - The unique id for the meeting
-     * //'password' => 'mp' -- REQUIRED - The moderator password for the meeting
-     * );
-     */
     public function getMeetingInfo($infoParams)
     {
-        $meetingId = $this->_requiredParam('meetingId',$infoParams);
-        echo 'GETMEETINGINFO FOR '.$meetingId.'<br>';
-        if ( self::$sessionInfoCache && array_key_exists($meetingId,self::$sessionInfoCache) ) {
-            echo 'USING CACHE for '.$meetingId.'<br>';
-            return self::$sessionInfoCache[$meetingId];
-        }
-        
-        $xml = $this->_processXmlResponse($this->getMeetingInfoUrl($infoParams));
+        $this->_meetingId = $this->_requiredParam('meetingId',$infoParams);
+
+        $x = parent::cacheLoad('getMeetingInfo_' . $this->_meetingId);
+        if ($x)
+            return $x;
+        $params = 'meetingID=' . urlencode($this->_meetingId);
+        $url = $this->_bbbServerBaseUrl . "api/getMeetingInfo?" . $params . '&checksum=' . sha1("getMeetingInfo" . $params . $this->_securitySalt);
+
+        $xml = $this->_processXmlResponse($url);
 
         if ($xml) {
             if (($xml->returncode != 'SUCCESS') || ($xml->messageKey == null)) {
                 $result = (array) $xml;
-                self::$sessionInfoCache[$meetingId] = $result;
-                return $result;
             } else {
                 $result = (array) $xml;
 
@@ -392,11 +329,9 @@ class BigBlueButton extends TcApi
                 foreach ($xml->attendees->attendee as $a) {
                     $result['attendees'][] = (array) $a;
                 }
-                
-                self::$sessionInfoCache[$meetingId] = $result;
-                
-                return $result;
             }
+            parent::cacheStore('getMeetingInfo_' . $this->_meetingId, $result);
+            return $result;
         } else {
             return null;
         }
@@ -415,26 +350,15 @@ class BigBlueButton extends TcApi
      * $recordingParams = array(
      * 'meetingId' => '1234', -- OPTIONAL - comma separate if multiple ids
      * );
-     */
-    public function getRecordingsUrl($recordingParams)
-    {
-        $recordingsUrl = $this->_bbbServerBaseUrl . "api/getRecordings?";
-        $params = 'meetingID=' . urlencode($recordingParams['meetingId']);
-        return ($recordingsUrl . $params . '&checksum=' . sha1("getRecordings" . $params . $this->_securitySalt));
-    }
-
-    /*
-     * USAGE:
-     * $recordingParams = array(
-     * 'meetingId' => '1234', -- OPTIONAL - comma separate if multiple ids
-     * );
      * NOTE: 'duration' DOES work when creating a meeting, so if you set duration
      * when creating a meeting, it will kick users out after the duration. Should
      * probably be required in user code when 'recording' is set to true.
      */
     public function getRecordings($recordingParams)
     {
-        $xml = $this->_processXmlResponse($this->getRecordingsUrl($recordingParams));
+        $recordingsUrl = $this->_bbbServerBaseUrl . "api/getRecordings?";
+        $params = 'meetingID=' . urlencode($recordingParams['meetingId']);
+        $xml = $this->_processXmlResponse($recordingsUrl . $params . '&checksum=' . sha1("getRecordings" . $params . $this->_securitySalt));
         if ($xml) {
             // If we don't get a success code or messageKey, find out why:
             if (($xml->returncode != 'SUCCESS') || ($xml->messageKey == null)) {
@@ -487,23 +411,11 @@ class BigBlueButton extends TcApi
      * 'publish' => 'true', -- REQUIRED - boolean: true/false
      * );
      */
-    public function getPublishRecordingsUrl($recordingParams)
+    public function publishRecordings($recordingParams)
     {
         $recordingsUrl = $this->_bbbServerBaseUrl . "api/publishRecordings?";
         $params = 'recordID=' . urlencode($recordingParams['recordId']) . '&publish=' . urlencode($recordingParams['publish']);
-        return ($recordingsUrl . $params . '&checksum=' . sha1("publishRecordings" . $params . $this->_securitySalt));
-    }
-
-    /*
-     * USAGE:
-     * $recordingParams = array(
-     * 'recordId' => '1234', -- REQUIRED - comma separate if multiple ids
-     * 'publish' => 'true', -- REQUIRED - boolean: true/false
-     * );
-     */
-    public function publishRecordings($recordingParams)
-    {
-        $xml = $this->_processXmlResponse($this->getPublishRecordingsUrl($recordingParams));
+        $xml = $this->_processXmlResponse($recordingsUrl . $params . '&checksum=' . sha1("publishRecordings" . $params . $this->_securitySalt));
         if ($xml) {
             return array(
                 'returncode' => $xml->returncode,
@@ -520,22 +432,11 @@ class BigBlueButton extends TcApi
      * 'recordId' => '1234', -- REQUIRED - comma separate if multiple ids
      * );
      */
-    public function getDeleteRecordingsUrl($recordingParams)
+    public function deleteRecordings($recordingParams)
     {
         $recordingsUrl = $this->_bbbServerBaseUrl . "api/deleteRecordings?";
         $params = 'recordID=' . urlencode($recordingParams['recordId']);
-        return ($recordingsUrl . $params . '&checksum=' . sha1("deleteRecordings" . $params . $this->_securitySalt));
-    }
-
-    /*
-     * USAGE:
-     * $recordingParams = array(
-     * 'recordId' => '1234', -- REQUIRED - comma separate if multiple ids
-     * );
-     */
-    public function deleteRecordings($recordingParams)
-    {
-        $xml = $this->_processXmlResponse($this->getDeleteRecordingsUrl($recordingParams));
+        $xml = $this->_processXmlResponse($recordingsUrl . $params . '&checksum=' . sha1("deleteRecordings" . $params . $this->_securitySalt));
         if ($xml) {
             return array(
                 'returncode' => $xml->returncode,
@@ -549,8 +450,6 @@ class BigBlueButton extends TcApi
     /**
      *
      * @brief get number of active rooms
-     * @param StdClass $meetings
-     *            -- the data from getMeetings
      * @return int
      */
     public function get_active_rooms()
@@ -568,36 +467,35 @@ class BigBlueButton extends TcApi
         }
         return $sum;
     }
-    
-    public function clearCaches() {
-        self::$sessionInfoCache = null;
+
+    public static function generatePassword()
+    {
+        return self::generateRandomString();
     }
-    
-    public function generatePassword() {
-        return $this->generateRandomString();
+
+    public static function generateMeetingId()
+    {
+        return self::generateRandomString();
     }
-    
-    public function generateMeetingId() {
-        return $this->generateRandomString();
-    }
-    
+
     /**
      *
      * @brief Generate random strings. Used to create meeting_id, attendance password and moderator password
      * @param int $length
      * @return string
      */
-    private function generateRandomString($length = 10)
+    private static function generateRandomString($length = 10)
     {
         return substr(str_shuffle(implode(array_merge(range(0, 9), range('A', 'Z'), range('a', 'z')))), 0, $length);
     }
-    
-    public function getServerUsers(TcServer $server) {
+
+    public function getServerUsers(TcServer $server)
+    {
         $meetings = $this->getMeetings();
         $count = 0;
-        if ( array_key_exists('meetings',$meetings) )
-            foreach($meetings['meetings'] as $m) {
-                //echo '<pre>'.var_export($m).'</pre>';
+        if (array_key_exists('meetings', $meetings))
+            foreach ($meetings['meetings'] as $m) {
+                // echo '<pre>'.var_export($m).'</pre>';
                 $count += $m['participantCount'];
             }
         return $count;
@@ -612,16 +510,13 @@ class BigBlueButton extends TcApi
 class TcBigBlueButtonSession extends TcDbSession
 {
     use paramsTrait;
-    
+
     function __construct(array $params = [])
     {
-        parent::__construct($params);
         if (count($params) > 0) {
-            $this->securitySalt = $params['salt'];
-            $this->mod_pw = $params['mod_pw'];
-            $this->att_pt = $params['att_pw'];
-            $this->username = $params['username'];
+            //TODO: add to params array and initialize when necessary
         }
+        parent::__construct($params);
     }
 
     /**
@@ -673,7 +568,7 @@ class TcBigBlueButtonSession extends TcDbSession
      */
     function get_meeting_users($pw)
     {
-        //global $langBBBGetUsersError, $langBBBConnectionError, $course_code;
+        // global $langBBBGetUsersError, $langBBBConnectionError, $course_code;
 
         // Instantiate the BBB class:
         $bbb = new BigBlueButton([
@@ -726,7 +621,7 @@ class TcBigBlueButtonSession extends TcDbSession
         $pw = $this->_requiredParam('pw', $joinParams);
         $uid = $this->_requiredParam('uid', $joinParams);
 
-        if (($this->mod_pw && $pw != $this->mod_pw) || ($this->mod_att && $pw != $this->att_pw))
+        if (( isset($this->mod_pw) && $pw != $this->mod_pw) || ( isset($this->mod_att) && $pw != $this->att_pw))
             return false; // die('Invalid password');
 
         if ($this->isFull())
@@ -762,8 +657,10 @@ class TcBigBlueButtonSession extends TcDbSession
         if (! $api)
             die('Api creation failed for isRunning');
 
-        $x = $api->getMeetingInfo(['meetingId'=>$this->meeting_id]);
-        return ( $x && $x['returncode']=='SUCCESS' && $x['meetingID'] );
+        $x = $api->getMeetingInfo([
+            'meetingId' => $this->meeting_id
+        ]);
+        return ($x && $x['returncode'] == 'SUCCESS' && $x['meetingID']);
     }
 
     /**
@@ -787,17 +684,18 @@ class TcBigBlueButtonSession extends TcDbSession
 
         return $api->isMeetingRunning($this->meeting_id);
     }
-    
-    
+
     /**
+     *
      * @brief BBB does not really use the schedule->start flow. Sessions are created/started when people join. Empty sessions are purged quickly.
      * @return boolean
      */
-    function create_meeting() {
+    function create_meeting()
+    {
         echo 'BBB meeting creation is a stub<br>';
-        return true; 
+        return true;
     }
-    
+
     /**
      *
      * @global type $course_code
@@ -816,35 +714,34 @@ class TcBigBlueButtonSession extends TcDbSession
     {
         global $langBBBWelcomeMsg;
 
-        //If a maximum limit of simultaneous meeting users has been set, use it
-        if (!$this->sessionUsers || $this->sessionUsers <= 0) {
+        // If a maximum limit of simultaneous meeting users has been set, use it
+        if (! $this->sessionUsers || $this->sessionUsers <= 0) {
             $users_to_join = $this->sessionUsers;
-        }
-        else { //otherwise just count participants
+        } else { // otherwise just count participants
             $users_to_join = $this->usersToBeJoined(); // this is DB-expensive so call before the loop
         }
 
-/*
-        // At this point we must start the meeting on a new server if a higher priority slot has opened...
-        // no matter what the previous assigned server was, therefore...
-        // Check each available server of this type
-        $r = TcServer::LoadAllByTypes(['bbb'], true);
-        if (($r) and count($r) > 0) {
-            foreach ($r as $server) {
-                echo 'Checking space for ' . $users_to_join . ' users on server ' . $server->id . '/' . $server->api_url . '....<br>';
-                if ($server->available($users_to_join)) { // careful, this is an API request on each server
-                    echo 'Server ' . $server->id . ' is AVAILABLE.' . "\n";
-                    break;
-                }
-            }
-        } else {
-            //Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
-            return false;
-        }
-
-        // Move the session even if the server won't let us set it up, we can use this to check the last server chosen
-        Database::get()->query("UPDATE tc_session SET running_at = ?d WHERE meeting_id = ?s", $server->id, $this->meeting_id);
-*/        
+        /*
+         * // At this point we must start the meeting on a new server if a higher priority slot has opened...
+         * // no matter what the previous assigned server was, therefore...
+         * // Check each available server of this type
+         * $r = TcServer::LoadAllByTypes(['bbb'], true);
+         * if (($r) and count($r) > 0) {
+         * foreach ($r as $server) {
+         * echo 'Checking space for ' . $users_to_join . ' users on server ' . $server->id . '/' . $server->api_url . '....<br>';
+         * if ($server->available($users_to_join)) { // careful, this is an API request on each server
+         * echo 'Server ' . $server->id . ' is AVAILABLE.' . "\n";
+         * break;
+         * }
+         * }
+         * } else {
+         * //Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
+         * return false;
+         * }
+         *
+         * // Move the session even if the server won't let us set it up, we can use this to check the last server chosen
+         * Database::get()->query("UPDATE tc_session SET running_at = ?d WHERE meeting_id = ?s", $server->id, $this->meeting_id);
+         */
 
         $duration = 0;
         if (($this->start_date != null) and ($this->end_date != null)) {
@@ -880,13 +777,19 @@ class TcBigBlueButtonSession extends TcDbSession
 
         return true;
     }
-    
-    public function clearCaches() {
-        $bbb = new BigBlueButton([
-            'server' => $server
-        ]);
-        $bbb->clearCaches();
+
+    public function save()
+    {
+        if (! $this->mod_pw)
+            $this->data->mod_pw = BigBluebutton::generatePassword();
+        if (! $this->att_pw)
+            $this->data->att_pw = BigBluebutton::generatePassword();
+        if (! $this->meeting_id)
+            $this->meeting_id = $this->data->meeting_id = BigBlueButton::generateMeetingId();
+        
+        return parent::save();
     }
+    
 }
 
 
